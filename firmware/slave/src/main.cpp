@@ -247,14 +247,14 @@ void updateActionFeedback() {
   if(actionInProgress) {
     unsigned long elapsed = millis() - actionStartTime;
     
-    // Buzzer: ON for 5 seconds
+    // Buzzer: ON for 1 second
     if(elapsed < BUZZER_DURATION) {
       digitalWrite(BUZZER_PIN, HIGH);
     } else {
       digitalWrite(BUZZER_PIN, LOW);
     }
     
-    // Red LED: ON for 10 seconds
+    // Red LED: ON for 2 seconds
     if(elapsed < ACTION_LED_DURATION) {
       digitalWrite(LED_ACTION, HIGH);
     } else {
@@ -400,8 +400,8 @@ void loop() {
     
     if(result == ESP_OK) {
       Serial.println("📡 Signal sent to Master!");
-      Serial.println("🔊 Buzzer: ON for 5 seconds");
-      Serial.println("🔴 Red LED: ON for 10 seconds\n");
+      Serial.println("🔊 Buzzer: ON for 1 second");
+      Serial.println("🔴 Red LED: ON for 2 seconds\n");
     } else {
       Serial.println("❌ Error sending signal!\n");
     }
