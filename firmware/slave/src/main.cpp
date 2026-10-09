@@ -1,23 +1,26 @@
 /**
  * ═══════════════════════════════════════════════════════════════════
- *  REC QUIZ BUZZER - FINAL SLAVE CODE (Production Ready)
- *  
+ *  WIRELESS QUIZ BUZZER - TEAM UNIT FIRMWARE
+ *
  *  Features:
-  *  - Interrupt-based button (microsecond precision)
-  *  - ESP-NOW communication with heartbeat
-  *  - Battery monitoring (analogReadMilliVolts - no calibration!)
-  *  - 3 LED indicators (Sync, Action, Battery)
-  *  - Buzzer feedback
+  *  - Interrupt-driven button, 50 ms debounce, micros() press timestamp
+  *  - ESP-NOW send to the master, heartbeat every 2 s
+  *  - Battery monitoring via analogReadMilliVolts (calibrated reference)
+  *  - 3 LED indicators (Action, Sync, Battery)
+  *  - Active buzzer on press
   *  - Connection timeout detection
- *  
+ *
  * Hardware Connections:
   * - Button: GPIO 4 (with internal pull-up)
   * - LED Action (Red): GPIO 2 (ON for 2 seconds after press)
   * - LED Sync (Green): GPIO 15 (connection status)
   * - LED Battery (Blue): GPIO 27 (battery indicator)
   * - Buzzer: GPIO 5 (beeps for 1 second after press)
-  * - Battery ADC: GPIO 34
- *  
+  * - Battery ADC: GPIO 34 (requires a 2:1 divider, 10k+10k)
+ *
+ *  Note: the press timestamp is transmitted, but the current master firmware
+ *  records its own arrival time instead. See API_REFERENCE.md.
+ *
  *  Developer: ASIF AHAMED S | ECE 2023-27
  *  Institution: Rajalakshmi Engineering College
  * ═══════════════════════════════════════════════════════════════════
@@ -309,7 +312,7 @@ void setup() {
   
   // Startup banner
   Serial.println("\n╔═══════════════════════════════════════════╗");
-  Serial.println("║  REC QUIZ BUZZER - FINAL PRODUCTION       ║");
+  Serial.println("║  QUIZ BUZZER - TEAM UNIT FIRMWARE         ║");
   Serial.println("╚═══════════════════════════════════════════╝");
   Serial.print("🏷️  Team ID: ");
   Serial.println(TEAM_ID);

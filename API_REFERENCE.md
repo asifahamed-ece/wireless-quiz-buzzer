@@ -1,8 +1,8 @@
-# 🔌 API REFERENCE - REC QUIZ BUZZER SYSTEM
+# 🔌 API Reference
 
 ## Overview
 
-This document describes the communication protocols used in the REC Quiz Buzzer System:
+This document describes the communication protocols used by the system:
 - **ESP-NOW**: Master ↔ Slave communication
 - **WebSocket**: Master ↔ Dashboard real-time updates
 - **HTTP REST**: Dashboard requests
@@ -50,9 +50,9 @@ typedef struct {
 
 ### Message Types
 
-#### 1. Heartbeat Message (Every 500ms)
+#### 1. Heartbeat Message (every 2 seconds)
 ```cpp
-// Sent continuously to keep connection alive
+// Sent continuously to keep the connection alive
 data.teamID = 3;
 data.timestamp = micros();
 data.buttonPressed = false;
@@ -61,52 +61,65 @@ data.batteryZone = 2;
 data.batteryPercent = 95.5;
 ```
 
+Interval: `HEARTBEAT_INTERVAL` = 2000 ms.
+
 **Purpose:**
-- Keep master informed of slave's status
-- Maintain battery level tracking
-- Detect disconnections
-- Monitor WiFi signal strength
+- Keeps the master informed that the unit is present
+- Carries the current battery zone and percentage
+- Lets the master detect a unit going silent
 
-**Timeout:** Slave considered disconnected if no heartbeat for 5 seconds
+**Timeout:** the master drops a unit that has sent nothing for
+`HEARTBEAT_TIMEOUT` = 5000 ms. The unit itself considers itself disconnected from
+the master after `CONNECTION_TIMEOUT` = 3000 ms without a successful send, which
+is what drives its green LED blinking.
 
-#### 2. Button Press Message (On button click)
+#### 2. Button Press Message (on button click)
 ```cpp
-// Sent when user presses button
+// Sent when the button is pressed
 data.teamID = 3;
-data.timestamp = micros();      // Exact moment of press
-data.buttonPressed = true;      // ← Button pressed flag
+data.timestamp = buttonPressTime;  // micros() captured in the ISR
+data.buttonPressed = true;         // ← Button pressed flag
 data.isHeartbeat = false;
 data.batteryZone = 2;
 data.batteryPercent = 95.5;
 ```
 
+The press timestamp is captured by an interrupt on GPIO 4, debounced by 50 ms,
+so it is taken as close to the physical press as the firmware allows.
+
 **Behavior:**
-- Only processed if Master is in READY mode
-- Ignored if already responded in this round
-- Response time measured to microsecond
-- Faster response = higher ranking
+- Accepted only while the master is in READY mode
+- Ignored in LISTEN mode (the master logs it and discards the packet)
+- Ignored if that unit already responded in the current round
+- The first accepted press wins; later presses are still added to the response
+  order
+
+**Ranking:** units are ranked by the order presses arrive at the master. See
+[Timing and response calculation](#-timing-and-response-calculation) for what
+the timestamps do and do not mean.
 
 ### Battery Levels
 
 ```
-ZONE 2 (GREEN):    100% - 60%  🔋
-ZONE 1 (YELLOW):   60% - 40%   ⚠️
-ZONE 0 (RED):      Below 40%   🪫
+ZONE 2 (GREEN):   voltage >= 3.70 V   🔋
+ZONE 1 (YELLOW):  voltage >= 3.45 V   ⚠️
+ZONE 0 (RED):     below 3.45 V        🪫
 ```
 
-**Dashboard Indication:**
-- Green = Fully charged, good to go
-- Yellow = Low battery warning
-- Red = Critical, may disconnect soon
+The thresholds are in volts, not percentages. See
+[Battery monitoring](#-battery-monitoring) for the full algorithm.
 
-### ESP-NOW Timing
+### Timings
 
 ```
-Master sends beacon every 1 second
-Slaves heartbeat every 500ms
-Button response time: <1ms
-Master-Slave latency: <5ms
+Team unit heartbeat:        every 2000 ms
+Master drops a unit after:  5000 ms of silence
+Broadcast after a press:    200 ms batching window (BATCH_WINDOW)
+Non-critical broadcasts:    at most once per 1000 ms (MIN_BROADCAST_INTERVAL)
 ```
+
+The master is receive-only. It never sends ESP-NOW packets, so there is no
+beacon and no master-to-unit latency to measure.
 
 ---
 
@@ -157,22 +170,22 @@ All messages are JSON objects containing:
     {
       "id": 2,
       "connected": false,
-      "zone": -1,
-      "percent": 0
+      "zone": 2,
+      "percent": 100
     }
   ],
   "winnerTeam": 3,
-  "winnerTime": 1.234567,
+  "winnerTime": 1234.56,
   "responses": [
     {
       "position": 1,
       "team": 3,
-      "time": 1.234567
+      "time": 1234.56
     },
     {
       "position": 2,
       "team": 5,
-      "time": 1.456789
+      "time": 1456.79
     }
   ],
   "connectedCount": 8,
@@ -194,11 +207,11 @@ All messages are JSON objects containing:
 | `teams[].zone` | int | 0-2 | Battery zone |
 | `teams[].percent` | float | 0-100 | Battery % |
 | `winnerTeam` | int | 0-10 | 0 = none, 1-10 = team |
-| `winnerTime` | float | - | Response time (seconds) |
+| `winnerTime` | float | - | Master uptime in ms when the winner pressed |
 | `responses[]` | array | - | All responses in order |
 | `responses[].position` | int | 1-10 | Response rank |
 | `responses[].team` | int | 1-10 | Team ID |
-| `responses[].time` | float | - | Response time (sec) |
+| `responses[].time` | float | - | Master uptime in ms when that press arrived |
 | `connectedCount` | int | 0-10 | Teams connected |
 | `greenCount` | int | 0-10 | Green battery teams |
 | `yellowCount` | int | 0-10 | Yellow battery teams |
@@ -223,35 +236,33 @@ All messages are JSON objects containing:
 ### JavaScript Client Example
 
 ```javascript
-// Connect to WebSocket
-const ws = new WebSocket('ws://192.168.4.1/ws');
+// Connect to the master's WebSocket, using the current page's host so the
+// dashboard works whether it is opened by IP or by hostname.
+const ws = new WebSocket(`ws://${window.location.hostname}/ws`);
 
-// Connection established
-ws.onopen = (event) => {
+ws.onopen = () => {
   console.log('Connected to Master');
 };
 
-// Receive data
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  
-  // Update UI with data
-  updateTeamStatus(data.teams);
-  updateWinner(data.winnerTeam);
-  updateResponses(data.responses);
-  updateBattery(data.greenCount, data.yellowCount, data.redCount);
+  // updateDashboard() dispatches to the four panel update functions
+  updateDashboard(data);
 };
 
-// Handle disconnection
-ws.onclose = (event) => {
+ws.onclose = () => {
   console.log('Disconnected from Master');
+  // the real client retries every 5 s via setInterval
 };
 
-// Error handling
 ws.onerror = (error) => {
   console.error('WebSocket error:', error);
 };
 ```
+
+The shipped dashboard's `updateDashboard()` derives the phase and then calls
+`updateTeamsList()`, `updateCenterDisplay()`, `updateResponsesList()`, and
+`updateInfoPanel()`. It never sends anything back over the socket.
 
 ---
 
@@ -259,42 +270,48 @@ ws.onerror = (error) => {
 
 ### Two-Phase System
 
-**LISTEN Phase:**
+**LISTEN phase:**
 ```
 quizActive = false
 
 Characteristics:
-- Question is being read
-- Slave buzzers ignored
-- Dashboard shows "READY" waiting message
+- The question is being read
+- Team unit presses are ignored
+- Dashboard centre: "LISTEN / Question Being Asked"
 - Master OLED: "LISTEN ?"
 
-Transition: Press RESET button → READY Phase
+Transition: press RESET → READY phase
 ```
 
-**READY Phase:**
+**READY phase:**
 ```
 quizActive = true
 
 Characteristics:
-- Waiting for responses
-- Slave buzzers processed
-- First response = WINNER
-- Master OLED: "READY"
+- Waiting for presses
+- Team unit presses are processed
+- First press = winner
+- Master OLED: "READY", then "BUZZED! T<n>" once a unit has pressed
+- Dashboard centre: "READY / Press Your Buzzer!", then the winner card
 
-Transition: Press RESET button → LISTEN Phase
+Transition: press RESET → LISTEN phase
 ```
+
+ANSWERED is not a separate state on the master. It exists only in the dashboard,
+which derives it from `quizActive == true` combined with `winnerTeam > 0`. The
+master clears `winnerTeam` and the response list on every RESET, so the round
+starts over either way.
 
 ### State Transitions
 
 ```
-LISTEN (Initial)
-    ↓ [Press RESET]
+LISTEN (initial)
+    ↓ [press RESET]
 READY
-    ↓ [First buzz received]
-ANSWERED (Winner shown)
-    ↓ [Press RESET]
-LISTEN (Cycle repeats)
+    ↓ [first press received]
+ANSWERED (winner shown) — dashboard-side view only
+    ↓ [press RESET]
+LISTEN (cycle repeats)
 ```
 
 ---
@@ -303,107 +320,163 @@ LISTEN (Cycle repeats)
 
 ### Algorithm
 
+The team unit averages 20 ADC readings taken 5 ms apart, undoes the 2:1 divider,
+then converts voltage to a percentage and to a zone:
+
 ```cpp
-// Slave measures battery voltage
-float voltage = analogRead(BATTERY_PIN) * (3.3 / 4095);
+// readBatteryVoltage()
+float sum = 0;
+for (int i = 0; i < 20; i++) {
+  sum += analogReadMilliVolts(BATTERY_PIN);
+  delay(5);
+}
+float voltage = (sum / 20) / 1000.0;
+voltage = voltage * (R1 + R2) / R2;   // R1 = R2 = 10k → ×2
 
-// Convert to percentage (linear approximation)
-float percent = (voltage - 3.0) / (4.2 - 3.0) * 100;
+// calculateBatteryPercentage()
+float percentage = (voltage - 3.0) / (4.08 - 3.0) * 100.0;
+return constrain(percentage, 0, 100);
 
-// Determine zone
-int zone = 2;  // default GREEN
-if (percent < 60) zone = 1;   // YELLOW
-if (percent < 40) zone = 0;   // RED
+// getBatteryZone() — thresholds are in VOLTS, not percent
+if      (voltage >= 3.70) return 2;  // GREEN
+else if (voltage >= 3.45) return 1;  // YELLOW
+else                        return 0; // RED
 ```
+
+Notes on the implementation:
+
+- `analogReadMilliVolts` uses the ESP32's calibrated internal reference, so no
+  manual calibration constant is needed.
+- The ADC is configured for 12-bit resolution with `ADC_11db` attenuation.
+- GPIO 34 is an ADC-only pin. The 2:1 divider is required; without it every
+  reading is halved and every unit reports RED.
+- The zone thresholds are voltage thresholds, not percentage thresholds. They do
+  not correspond exactly to 60% and 40% of the 3.0-4.08 V range.
+- The battery is re-read every 5 seconds (`BATTERY_CHECK_INTERVAL`).
 
 ### Three-Zone System
 
-| Zone | Color | Percent | Status | Action |
-|------|-------|---------|--------|--------|
-| 2 | 🟢 GREEN | 100-60% | Optimal | Ready to use |
-| 1 | 🟡 YELLOW | 60-40% | Warning | Low battery warning |
-| 0 | 🔴 RED | <40% | Critical | May disconnect soon |
+| Zone | Colour | Voltage | Approx. percent | Status |
+|------|--------|---------|-----------------|--------|
+| 2 | 🟢 GREEN | ≥ 3.70 V | ~65% and above | Ready to use |
+| 1 | 🟡 YELLOW | 3.45 - 3.70 V | ~42% - 65% | Charge soon |
+| 0 | 🔴 RED | < 3.45 V | below ~42% | Replace now |
 
 ### Master Tracking
 
 ```cpp
 // Master maintains battery status for all teams
-int teamBatteryZone[MAX_TEAMS];      // 0, 1, or 2
-float teamBatteryPercent[MAX_TEAMS]; // 0-100%
+int   teamBatteryZone[MAX_TEAMS];      // 0, 1, or 2
+float teamBatteryPercent[MAX_TEAMS];   // 0-100
 
-// Updated on every heartbeat from slave
+// Updated on every packet received from a team unit
 ```
+
+The master reads both fields from each incoming packet and stores them against
+the sending unit's `teamID`. Units start at 100% / GREEN until they report.
 
 ### Dashboard Display
 
-**Right Panel - Battery Indicators:**
+**Left panel, per team** — the battery zone appears as a small icon next to each
+connected team:
+
 ```
-🔋 GREEN: 100-60%
-  - Displays count and team IDs
-  
-⚠️ YELLOW: 60-40%
-  - Displays count and team IDs
-  - Warning indicator
-  
-🪫 RED: Below 40%
-  - Displays count and team IDs
-  - Critical alert
+🔋 GREEN   zone 2
+⚠️ YELLOW  zone 1
+🪫 RED     zone 0
 ```
+
+**Right panel** — counts across connected units:
+
+```
+🔋×8 ⚠️×1 🪫×0
+```
+
+plus a summary line: `All good`, `n low`, or `n critical`.
 
 ---
 
-## ⏱️ TIMING & RESPONSE CALCULATION
+## ⏱️ Timing and Response Calculation
 
-### Timestamp Units
+This section describes what the firmware actually measures, because it is not
+what you might assume from the field names.
 
-```cpp
-// ESP32 uses microseconds
-unsigned long timestamp = micros();  // Returns microseconds since boot
+### What each unit timestamps
 
-// Dashboard converts to seconds for display
-time_in_seconds = timestamp / 1000000.0;
-```
-
-### Response Time Calculation
+Each team unit captures its own press time in the button interrupt:
 
 ```cpp
-// Master receives button press from slave
-unsigned long slaveTimestamp = incomingData.timestamp;
-unsigned long masterTime = micros();
-
-// Response time = Master's current time - Slave's timestamp
-unsigned long responseTime = masterTime - slaveTimestamp;
-
-// Display as seconds
-float displayTime = responseTime / 1000000.0;  // Convert to seconds
+void IRAM_ATTR buttonISR() {
+  unsigned long currentTime = micros();
+  if (currentTime - lastInterruptTime > DEBOUNCE_TIME) {  // 50 ms debounce
+    buttonPressed = true;
+    buttonPressTime = currentTime;   // this unit's clock
+    lastInterruptTime = currentTime;
+  }
+}
 ```
 
-### Example
+That value is transmitted in the packet as `timestamp`.
 
+### What the master records
+
+On arrival, the master does **not** use the timestamp from the packet. It stamps
+its own clock:
+
+```cpp
+// master, in the ESP-NOW receive callback
+unsigned long masterTimestamp = micros();   // master's clock, not the unit's
 ```
-Slave presses button at: 1234567890 μs
-Master receives at:      1234567895 μs
-Response time:           5 μs (0.000005 seconds)
-Display: "5 μs" or "0.000005 sec"
+
+`incomingData.timestamp` is never read. Every response is therefore recorded
+with the master's arrival time.
+
+### What the dashboard shows
+
+```cpp
+doc["winnerTime"] = winnerTimestamp / 1000.0;              // ms since master boot
+resp["time"]      = responseOrder[i].timestamp / 1000.0;   // ms since master boot
 ```
+
+The dashboard renders both as `⚡ <value> ms`.
+
+So the number on the dashboard is **the master's uptime in milliseconds at the
+moment the press arrived**, not a measured reaction time. It is not a response
+time, and the values are not comparable between units, because they all come
+from one clock.
 
 ### Ranking
 
-```
-1st Response: Fastest time
-2nd Response: 2nd fastest time
-...
-10th Response: Slowest time
+Ranking does not depend on those numbers. The master records presses in the
+order the receive callback fires them, and that arrival order is the ranking:
 
-Example:
-Position 1: Team 3 @ 1.234567 sec
-Position 2: Team 5 @ 1.456789 sec
-Position 3: Team 2 @ 1.678901 sec
 ```
+Position 1: the first packet the master processed
+Position 2: the second, and so on
+```
+
+`position` is assigned sequentially as packets are received. For units close
+together on a quiet channel this is a fair ordering of who pressed first. Signal
+strength and interference both affect it.
+
+### Why the unit timestamp is unused
+
+Using the per-unit timestamp for true response timing would require two things
+the firmware does not do:
+
+1. The master would need to subtract `incomingData.timestamp` from its own
+   `micros()`.
+2. The unit clocks would need to be synchronised to the master, since each
+   ESP32's `micros()` counts from its own boot and the counters are unrelated.
+
+Without synchronisation, the subtraction would produce meaningless values —
+potentially negative ones. The field is present in the packet structure and the
+master already receives it, so adding a sync step and using it is a contained
+change rather than a redesign.
 
 ---
 
-## 🎯 HTTP REST ENDPOINTS
+## 🎯 HTTP REST Endpoints
 
 ### Static Files
 
@@ -452,78 +525,93 @@ Status: 204 No Content
 
 ---
 
-## 📈 BANDWIDTH USAGE
+## 📈 Bandwidth Usage
 
-### Master → Slaves (ESP-NOW)
+### Team units → Master (ESP-NOW)
 
-**Per Message:**
-- Struct size: ~20 bytes
-- Heartbeat frequency: 0.5 Hz (2 seconds apart)
-- Button press: 1 event per round
+Traffic is one-way: the master never sends ESP-NOW packets.
 
-**Estimated Bandwidth:**
+**Per packet:**
+- `BuzzerData` is 20 bytes (`sizeof` with natural alignment on ESP32)
+- Heartbeat: one packet per unit every 2 s
+- Button press: one packet per press
+
+**Steady state (10 units connected, all heartbeating):**
 ```
-Heartbeat: 10 slaves × 20 bytes × 2/sec = 400 bytes/sec
-Button: 10 teams × 20 bytes × ~1/10sec = 20 bytes/sec
-Total: ~420 bytes/sec ≈ 3.36 Kbps
+10 units × 20 bytes / 2 s = 100 bytes/sec ≈ 0.8 Kbps
 ```
+
+Button presses add a short burst of at most 10 packets per round, which is
+negligible against the heartbeat rate.
 
 ### Master → Dashboard (WebSocket)
 
-**Per Message:**
-- JSON size: ~500 bytes (typical)
-- Update frequency: varies (1-10 updates/sec)
+**Per message:**
+- JSON payload is roughly 500-700 bytes for 10 teams
+- Non-critical updates are throttled to at most one per second
+  (`MIN_BROADCAST_INTERVAL`)
+- Critical updates (phase change, winner, press batches) bypass the throttle
 
-**Estimated Bandwidth:**
 ```
-Conservative: 1 update/sec × 500 bytes = 500 bytes/sec
-Active round: 10 updates/sec × 500 bytes = 5000 bytes/sec
-Total: ~0.5-5 Kbps
+Idle:              1 msg/sec  × ~600 B = ~600 B/sec ≈ 4.8 Kbps
+Active round:      a few messages per round, plus throttled status updates
 ```
+
+### Dashboard → Master
+
+None. The dashboard never sends messages; `ws.send()` is not used anywhere in
+`dashboard/data/script.js`. It only receives.
 
 ---
 
-## 🧪 TESTING ENDPOINTS
+## 🧪 Testing
 
 ### Manual ESP-NOW Test
 
+Add this to `firmware/slave/src/main.cpp` temporarily to send one synthetic press
+instead of waiting for the button:
+
 ```cpp
-// Send test data from slave
 BuzzerData testData;
-testData.teamID = 1;
+testData.teamID = TEAM_ID;
 testData.timestamp = micros();
 testData.buttonPressed = true;
 testData.isHeartbeat = false;
-testData.batteryZone = 2;
-testData.batteryPercent = 95.5;
+testData.batteryZone = currentBatteryZone;
+testData.batteryPercent = lastPercentage;
 
 esp_now_send(masterMAC, (uint8_t *)&testData, sizeof(testData));
 ```
 
+The master should log `FIRST TO BUZZ` if it is in READY mode, or
+`buzzed in LISTEN mode (ignored)` if it is not.
+
 ### Manual WebSocket Test
 
 ```bash
-# Using wscat tool
 npm install -g wscat
-
-# Connect to master
 wscat -c ws://192.168.4.1/ws
-
-# You'll receive JSON updates in real-time
 ```
 
-### Dashboard Test
+JSON updates arrive on connect and after each change.
+
+### Dashboard Checks
+
+In the browser console (F12):
 
 ```javascript
-// Open browser console (F12)
-// Check WebSocket connection
-console.log(ws.readyState);  // 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+// Connection state: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+console.log(ws.readyState);
+```
 
-// Check latest data
-console.log(lastReceivedData);
+Note that `ws` is a module-level `let` in `script.js`, not on `window`, so it may
+need to be reached directly by name. The dashboard never calls `ws.send()`.
 
-// Manually trigger update
-ws.send('{"test": true}');
+To confirm the master is serving files:
+
+```bash
+curl -I http://192.168.4.1/            # index.html
+curl -I http://192.168.4.1/script.js   # 200 + application/javascript
 ```
 
 ---
@@ -543,31 +631,45 @@ ws.send('{"test": true}');
 
 ### Dashboard Console
 
-```javascript
-// WebSocket events
-WS Connected: ws://192.168.4.1/ws
-WS Received: {"teams": [...], "quizActive": true}
-WS Disconnected: code=1000
-WS Error: Network error
+Real output from `dashboard/data/script.js`:
 
-// UI updates
-Team 3 connected
-Winner: Team 3 (1.234567 sec)
-Response #2: Team 5
-Battery: 7🔋 1⚠️ 0🪫
+```
+📊 Dashboard loaded
+📢 Forcing LISTEN phase on load
+✅ Dashboard initialized in LISTEN mode
+✅ WebSocket connected
+📡 Received: quizActive=true, winner=3, responses=2
+🔄 Phase Change: LISTEN → READY
+🎵 BGM Started (LISTEN → READY)
+🔊 Team 3 buzzed
+🏆 Victory jingle played!
+🏆 BGM Stopped (Winner found)
+✅ Team 4 online
+❌ Team 4 offline
+❌ WebSocket disconnected
+🔄 Attempting reconnect...
+```
+
+On failure:
+
+```
+JSON parse error: ...
+WebSocket error: ...
 ```
 
 ---
 
-## 📚 RELATED DOCUMENTATION
+## 📚 Related Documentation
 
-- **README.md**: Project overview
-- **HARDWARE_SETUP.md**: Hardware assembly
-- **SOFTWARE_SETUP.md**: Software installation
-- **TROUBLESHOOTING.md**: Common issues
+- [README.md](README.md): overview and usage
+- [HARDWARE_SETUP.md](HARDWARE_SETUP.md): wiring and bill of materials
+- [SOFTWARE_SETUP.md](SOFTWARE_SETUP.md): flashing and network setup
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md): symptom-driven fixes
+- [QUICK_REFERENCE.md](QUICK_REFERENCE.md): command cheatsheet
+- [COMPLETE_DOCS.md](COMPLETE_DOCS.md): index of all documents
 
 ---
 
 **Made with ❤️ by Asif Ahamed S**  
 **Rajalakshmi Engineering College, Chennai**  
-**Version 1.0 - January 2026**
+**Version 1.1**

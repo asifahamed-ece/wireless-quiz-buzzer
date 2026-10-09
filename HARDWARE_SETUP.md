@@ -9,25 +9,29 @@
 1x OLED Display (0.96" I2C - SSD1306)
 1x Push Button (Momentary SPST)
 1x Toggle Switch (SPST)
-1x 5V Buzzer (Active)
 3x LEDs (Red, Green, Blue - 5mm)
 3x 220Ω Resistors (LED current limiting)
-2x 10kΩ Resistors (Pull-down)
 1x Breadboard or PCB
 1x 5V Power Supply (2A rated)
 Jumper wires (M-F and M-M)
 ```
 
+The master has no buzzer. All buzzer feedback comes from the team units and
+from the dashboard.
+
+Both the reset button and the power switch use the ESP32's internal pull-up
+(`INPUT_PULLUP` in `firmware/master/src/main.cpp`), so no external pull resistors
+are needed. Wire each to GND to close the circuit.
+
 ### Pinout Configuration
 
 #### ESP32 Master Pins
 ```
-GPIO 13 (D13) → RESET BUTTON
+GPIO 13 (D13) → RESET BUTTON (to GND)
 GPIO 2  (D2)  → LED_WINNER (Red)
 GPIO 15 (D15) → LED_SYNC (Green)
 GPIO 16 (D16) → LED_READY (Blue)
-GPIO 25 (D25) → POWER SWITCH
-GPIO 27 (D27) → BUZZER
+GPIO 25 (D25) → POWER SWITCH (to GND)
 SDA (GPIO 21) → OLED SDA
 SCL (GPIO 22) → OLED SCL
 GND           → OLED GND
@@ -53,9 +57,6 @@ GND           → OLED GND
 │                  ├─→ Power Switch              │
 │  GND ────────────┘                             │
 │                                                 │
-│  GPIO27 ─────────→ Buzzer (+)                  │
-│  GND ────────────→ Buzzer (-)                  │
-│                                                 │
 │  GPIO21 (SDA) ──→ OLED SDA                     │
 │  GPIO22 (SCL) ──→ OLED SCL                     │
 │  GND ──────────→ OLED GND                      │
@@ -64,8 +65,7 @@ GND           → OLED GND
 └─────────────────────────────────────────────────┘
 
         5V Power Supply
-        ├─→ ESP32 5V
-        └─→ Buzzer VCC
+        └─→ ESP32 5V
 ```
 
 ### Assembly Steps
@@ -112,24 +112,19 @@ Anode   → GPIO16 (through 220Ω resistor)
 Cathode → GND
 ```
 
-#### 6. Add Buzzer
-```
-Buzzer Connections:
-+ Pin → GPIO27
-- Pin → GND
-```
-
 ---
 
-## Slave Unit Assembly (Repeat for Teams 1-10)
+## Team Unit Assembly (Repeat for Teams 1-10)
 
-### Components Required (Per Slave)
+### Components Required (Per Team Unit)
 
 ```
 1x ESP32 DevKit (30-pin)
 1x Push Button (Momentary SPST)
-1x LED (5mm - any color)
-1x 220Ω Resistor (LED current limiting)
+3x LEDs (5mm - Red, Green, Blue)
+3x 220Ω Resistors (LED current limiting)
+1x Active Buzzer
+2x 10kΩ Resistors (battery voltage divider)
 1x 18650 Li-ion Battery
 1x 18650 Battery Holder
 Jumper wires
@@ -137,36 +132,55 @@ Jumper wires
 
 ### Pinout Configuration
 
-#### ESP32 Slave Pins
+#### ESP32 Team Unit Pins
 ```
-GPIO 13 (D13) → BUZZER BUTTON
-GPIO 2  (D2)  → STATUS LED
-GND           → Common Ground
-VBAT          → Battery Voltage (for monitoring)
+GPIO 4  (D4)  → BUTTON (to GND, internal pull-up)
+GPIO 2  (D2)  → LED_ACTION (Red)
+GPIO 15 (D15) → LED_SYNC (Green)
+GPIO 27 (D27) → LED_BATTERY (Blue)
+GPIO 5  (D5)  → BUZZER
+GPIO 34      → BATTERY_ADC (input only, no internal pull-up)
+GND          → Common Ground
 ```
 
-### Wiring Diagram (Single Slave)
+GPIO 34 is an ADC input with no internal pull-up and no output capability. The
+battery divider feeds it.
+
+### Wiring Diagram (Single Team Unit)
 
 ```
-┌──────────────────────────────────────────┐
-│          ESP32 DevKit (Slave)            │
-│                                          │
-│  GPIO13 ──────────┐                      │
-│                   ├─→ Buzzer Button      │
-│  GND ─────────────┘                      │
-│                                          │
-│  GPIO2 ───[220Ω]─→ LED (+)              │
-│  GND ────────────→ LED (-)              │
-│                                          │
-│  VBAT ──→ 18650 Battery Positive        │
-│  GND  ──→ 18650 Battery Negative        │
-│                                          │
-└──────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│          ESP32 DevKit (Team Unit)          │
+│                                            │
+│  GPIO4 ──────────┐                         │
+│                  ├─→ Button               │
+│  GND ─────────────┘                        │
+│                                            │
+│  GPIO2  ──[220Ω]─→ LED_ACTION (Red)        │
+│  GPIO15 ──[220Ω]─→ LED_SYNC (Green)        │
+│  GPIO27 ──[220Ω]─→ LED_BATTERY (Blue)      │
+│  GND  ───────────→ LED cathodes            │
+│                                            │
+│  GPIO5 ──────────→ Buzzer (+)              │
+│  GND ────────────→ Buzzer (-)              │
+│                                            │
+│  18650 (+) ──[10kΩ]──┐                      │
+│                     ├──→ GPIO34 (ADC)      │
+│              [10kΩ]─┤                      │
+│                   GND                     │
+│                                            │
+└────────────────────────────────────────────┘
 
-    18650 Battery Holder
-    ├─→ + to ESP32 VBAT
-    └─→ - to ESP32 GND
+  Button, LED and buzzer behaviour:
+    - Button press  → buzzer 1 s, red LED 2 s, packet sent to master
+    - Connected     → green LED solid
+    - No master     → green LED blinking
+    - Battery ok    → blue LED off
+    - Battery low   → blue LED blinking
 ```
+
+The battery divider must be present: the firmware multiplies the GPIO 34 reading
+by 2 to recover the cell voltage, which assumes two equal 10 kΩ resistors.
 
 ### Portable Case Assembly
 
@@ -180,7 +194,7 @@ VBAT          → Battery Voltage (for monitoring)
 1. Mount ESP32 inside case with velcro
 2. Attach battery holder at bottom
 3. Mount push button on front
-4. Attach LED on top (visible indicator)
+4. Attach LEDs on top (visible indicators)
 5. Create ventilation holes for heat dissipation
 
 ---
@@ -191,43 +205,47 @@ VBAT          → Battery Voltage (for monitoring)
 
 ```
 1. Power ON → OLED should display:
-   ✓ "REC QUIZ BUZZER"
+   ✓ "QUIZ BUZZER"
    ✓ "Initializing..."
    
-2. Wait 2 seconds → Should display:
+2. If the power switch is OFF, OLED shows the standby screen:
+   ✓ "STANDBY"
+   
+3. Flip the power switch ON → master starts:
    ✓ "CH: 1"
-   ✓ "Teams: 0/10" (waiting for slave units)
+   ✓ "Teams: 0/10" (waiting for team units)
+   ✓ Serial prints the AP IP and the master MAC
    
-3. Check LEDs:
-   ✓ LED_READY should be OFF
-   ✓ LED_SYNC should blink (no teams connected)
-   ✓ LED_WINNER should be OFF
+4. Check LEDs:
+   ✓ LED_SYNC blinks while no team is connected
+   ✓ LED_SYNC goes solid once a team connects
+   ✓ LED_READY flashes for 1 s when RESET is pressed
    
-4. Test Reset Button:
-   ✓ Press once → Buzzer sound
-   ✓ OLED shows phase change
-   
-5. Test Buzzer:
-   ✓ Should emit sound on phase change
+5. Test Reset Button:
+   ✓ Press once → OLED switches between LISTEN and READY
+   ✓ Serial prints "LISTEN → READY mode" or the reverse
 ```
 
-### Slave Unit Test
+There is no buzzer on the master, so no sound is expected from it.
+
+### Team Unit Test
 
 ```
-1. Power ON → LED should blink
+1. Power ON → green LED blinks (searching for master)
    
-2. Within 5 seconds:
-   ✓ LED should stay ON (connected to master)
+2. Within 3 seconds of the master being up:
+   ✓ green LED goes solid (connected to master)
    
 3. Test Button:
-   ✓ Press → LED blinks
-   ✓ Data sent to master
+   ✓ Press → buzzer sounds 1 s, red LED lights 2 s
+   ✓ Serial prints "BUTTON PRESSED!"
    
-4. Power OFF:
-   ✓ LED turns OFF
+4. Test battery indicator:
+   ✓ blue LED off (battery healthy)
+   ✓ blue LED blinking (battery low or critical)
    
-5. Power ON again:
-   ✓ Reconnects automatically to master
+5. Power OFF:
+   ✓ all LEDs off
 ```
 
 ---
@@ -252,31 +270,33 @@ Solution:
 4. Try different I2C port if available
 ```
 
-### Slaves Not Connecting
+### Team Units Not Connecting
 ```
 Solution:
-1. Both units in WIFI_AP_STA mode
-2. Both units running ESP-NOW initialized
-3. Check firmware version matches
-4. Try uploading slave firmware again
-5. Restart both units
+1. Master in AP mode, team units in STA mode
+2. Both running ESP-NOW, both on channel 1
+3. Check masterMAC on the unit matches the master's MAC
+4. Check every unit has a unique TEAM_ID in 1-10
+5. Restart the master first, then the units
 ```
 
 ### Reset Button Bouncing
 ```
 Solution:
-1. Already handled in firmware (100ms debounce)
-2. If still occurs, add 0.1µF capacitor across button pins
-3. Update debounce delay in code
+1. Already handled in firmware (100 ms ISR debounce, plus a 1 s cooldown
+   before the phase actually changes)
+2. If still occurs, add a 0.1µF capacitor across the button pins
+3. Update the debounce delay in resetButtonISR()
 ```
 
 ### Buzzer Not Working
 ```
 Solution:
-1. Check GPIO27 connection
-2. Test buzzer directly (5V applied)
-3. Verify buzzer polarity (+ and -)
-4. Try adjusting tone frequency/duration
+1. Check the buzzer is on GPIO 5 of the team unit
+2. The buzzer needs a separate 5V supply - the ESP32 pin only drives it
+   through a transistor or relay; do not power a 5V buzzer directly from
+   a GPIO
+3. Verify polarity
 ```
 
 ---
@@ -290,33 +310,34 @@ Solution:
 | OLED 0.96" I2C | 1 | $3 |
 | Push Button | 1 | $0.50 |
 | Toggle Switch | 1 | $1 |
-| Buzzer 5V Active | 1 | $2 |
 | LEDs (3x) | 3 | $0.50 |
-| Resistors | 5 | $0.50 |
+| Resistors 220Ω (3x) | 3 | $0.30 |
 | Breadboard | 1 | $3 |
 | Power Supply 5V 2A | 1 | $8 |
 | Jumper Wires | 1 pack | $2 |
-| **Total Master** | | **~$28** |
+| **Total Master** | | **~$26** |
 
-### Per Slave Unit
+### Per Team Unit
 | Part | Quantity | Cost (USD) |
 |------|----------|-----------|
 | ESP32 DevKit | 1 | $8 |
 | Push Button | 1 | $0.50 |
-| LED | 1 | $0.20 |
-| Resistor 220Ω | 1 | $0.10 |
+| LEDs (3x) | 3 | $0.50 |
+| Resistors 220Ω (3x) | 3 | $0.30 |
+| Resistors 10kΩ (2x) | 2 | $0.20 |
+| Active Buzzer | 1 | $2 |
 | 18650 Battery | 1 | $3 |
 | Battery Holder | 1 | $1 |
 | Case/Enclosure | 1 | $3 |
 | Jumper Wires | 1 | $1 |
-| **Total Per Slave** | | **~$17** |
+| **Total Per Team Unit** | | **~$20** |
 
 ### Full System (10 Teams)
 ```
-Master Unit:          $28
-10 Slave Units:       $170 (10 × $17)
-─────────────────────────
-Total Cost:           $198 USD
+Master Unit:           $26
+10 Team Units:         $200 (10 × $20)
+─────────────────────────────
+Total Cost:            $226 USD
 ```
 
 ---

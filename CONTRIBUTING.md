@@ -1,4 +1,4 @@
-# Contributing to REC Quiz Buzzer System
+# Contributing to Wireless Quiz Buzzer
 
 First off, thank you for considering contributing to this project! 🎉
 
@@ -66,10 +66,10 @@ Feature requests are welcome! Please provide:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/REC-Quiz-Buzzer-System.git
+git clone https://github.com/YOUR_USERNAME/wireless-quiz-buzzer.git
 
 # Add upstream remote
-git remote add upstream https://github.com/asifahamed/REC-Quiz-Buzzer-System.git
+git remote add upstream https://github.com/asifahamed-ece/wireless-quiz-buzzer.git
 
 # Create feature branch
 git checkout -b feature/amazing-feature

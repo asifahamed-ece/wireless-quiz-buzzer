@@ -1,4 +1,4 @@
-# 🔧 TROUBLESHOOTING GUIDE - REC QUIZ BUZZER SYSTEM
+# 🔧 Troubleshooting Guide
 
 ## 🆘 QUICK HELP
 

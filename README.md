@@ -90,8 +90,8 @@
 
 #### 1️⃣ Clone Repository
 ```bash
-git clone https://github.com/asifahamed-ece/REC-Quiz-Buzzer-System.git
-cd REC-Quiz-Buzzer-System
+git clone https://github.com/asifahamed-ece/wireless-quiz-buzzer.git
+cd wireless-quiz-buzzer
 ```
 
 #### 2️⃣ Flash Master ESP32
@@ -352,9 +352,9 @@ Rajalakshmi Engineering College, Chennai
 
 ## 🔗 Quick Links
 
-- [Report Bug](https://github.com/asifahamed-ece/REC-Quiz-Buzzer-System/issues)
-- [Request Feature](https://github.com/asifahamed-ece/REC-Quiz-Buzzer-System/issues)
-- [View Releases](https://github.com/asifahamed-ece/REC-Quiz-Buzzer-System/releases)
+- [Report Bug](https://github.com/asifahamed-ece/wireless-quiz-buzzer/issues)
+- [Request Feature](https://github.com/asifahamed-ece/wireless-quiz-buzzer/issues)
+- [View Releases](https://github.com/asifahamed-ece/wireless-quiz-buzzer/releases)
 
 ---
 

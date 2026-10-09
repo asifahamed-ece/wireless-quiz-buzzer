@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-01-07
 
 ### Added
-- Initial release of REC Quiz Buzzer System
+- Initial release of the quiz buzzer system
 - ESP32 master-slave architecture with ESP-NOW communication
 - Real-time WebSocket dashboard with instant updates
 - Two-phase quiz system (LISTEN → READY → ANSWERED)
@@ -93,4 +93,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-**See [Releases](https://github.com/asifahamed/REC-Quiz-Buzzer-System/releases) for binary downloads and previous versions.**
+**See [Releases](https://github.com/asifahamed-ece/wireless-quiz-buzzer/releases) for binary downloads and previous versions.**

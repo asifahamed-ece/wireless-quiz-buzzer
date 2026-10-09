@@ -1,18 +1,18 @@
 /**
  * ═══════════════════════════════════════════════════════════════════
- * PROJECT: REC Quiz Buzzer System
- * VERSION: 1.1 - LISTEN/READY MODE (FIXED)
+ * PROJECT: Wireless Quiz Buzzer - Master
+ * VERSION: 1.1
  * DATE: January 2026
- * 
+ *
  * SYSTEM SPECIFICATIONS:
  * - Max Teams: 10
- * - Communication: ESP-NOW (2.4GHz)
+ * - Communication: ESP-NOW (2.4GHz), receive only
  * - Range: ~50 meters
- * - Response Time: <1ms (microsecond precision)
- * - Dashboard: Real-time WebSocket
- * - Battery Monitoring: 3-zone system
- * - Two-Phase System: LISTEN → READY → ANSWERED
- * 
+ * - Ranking: by arrival order at this unit, not by a computed response time
+ * - Dashboard: real-time WebSocket + LittleFS static files
+ * - Battery Monitoring: 3-zone system, from unit-reported values
+ * - Two-Phase System: LISTEN -> READY (ANSWERED is a dashboard-side view)
+ *
  * DEVELOPER: ASIF AHAMED
  * DEPARTMENT: Electronics and Communication Engineering
  * BATCH: 2023-2027
@@ -276,7 +276,7 @@ void displayStandbyScreen() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.println("REC QUIZ BUZZER");
+  display.println("QUIZ BUZZER");
   display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
   display.setTextSize(2);
   display.setCursor(25, 20);
@@ -294,7 +294,7 @@ void updateDisplay() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.println("REC QUIZ BUZZER");
+  display.println("QUIZ BUZZER");
   display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
   display.setCursor(0, 12);
   display.print("CH:");
@@ -589,7 +589,7 @@ void setup() {
   lastSwitchState = systemEnabled;
   
   Serial.println("\n╔═══════════════════════════════════════════╗");
-  Serial.println("║  REC QUIZ BUZZER - TWO PHASE SYSTEM      ║");
+  Serial.println("║  QUIZ BUZZER - TWO PHASE SYSTEM           ║");
   Serial.println("╚═══════════════════════════════════════════╝");
   
   if(!systemEnabled) {

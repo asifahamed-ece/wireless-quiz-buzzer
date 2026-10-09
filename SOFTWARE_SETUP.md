@@ -1,12 +1,12 @@
-# 📋 SOFTWARE SETUP GUIDE - REC QUIZ BUZZER SYSTEM
+# 📋 Software Setup Guide
 
 ## 🎯 Quick Overview
 
-This guide covers setting up the **Master ESP32 firmware**, **Slave ESP32 firmware**, and **Web Dashboard** for the REC Quiz Buzzer System.
+This guide covers setting up the **master ESP32 firmware**, the **team unit firmware**, and the **web dashboard**.
 
 **System Architecture:**
 ```
-Master ESP32 (AP)  ←→ [ESP-NOW] ←→ 10× Slave ESP32 (Clients)
+Master ESP32 (AP)  ←→ [ESP-NOW] ←→ 10× Team ESP32 (Clients)
       ↓
    Web Dashboard (WebSocket)
       ↓
@@ -18,8 +18,8 @@ Master ESP32 (AP)  ←→ [ESP-NOW] ←→ 10× Slave ESP32 (Clients)
 ## 📋 PREREQUISITES
 
 ### Hardware Requirements
-- **Master Unit:** ESP32 DevKit + OLED 128x64 + 3× LEDs + Reset Button + Power Switch
-- **Slave Units:** 10× ESP32 DevKit + Buttons + LEDs (each)
+- **Master unit:** ESP32 DevKit + OLED 128x64 + 3× LEDs + Reset button + Power switch
+- **Team units:** 10× ESP32 DevKit + button + 3× LEDs + buzzer + battery (each)
 - **USB Cables:** For programming ESP32s
 - **Power Supply:** 5V for all units
 
@@ -56,55 +56,60 @@ Master ESP32 (AP)  ←→ [ESP-NOW] ←→ 10× Slave ESP32 (Clients)
 ### STEP 2: Create Project Structure
 
 ```bash
-mkdir REC-Quiz-Buzzer-System
-cd REC-Quiz-Buzzer-System
+git clone https://github.com/asifahamed-ece/wireless-quiz-buzzer.git
+cd wireless-quiz-buzzer
 
-# Create folders
-mkdir -p firmware/{master,slave}/src
-mkdir -p dashboard/data
-mkdir -p docs
+# The folders already exist after cloning - nothing to create
+ls firmware dashboard/data
 ```
 
 ---
 
 ### STEP 3: Master ESP32 Setup
 
-#### 3.1 Create Master Project
+#### 3.1 PlatformIO project
 
-**Using PlatformIO:**
-```bash
-cd firmware/master
+`firmware/master/platformio.ini` as shipped:
 
-# platformio.ini content:
-[env:esp32doit-devkit-v1]
+```ini
+[platformio]
+; The dashboard is flashed to the master's LittleFS with: pio run --target uploadfs
+data_dir = ../../dashboard/data
+
+[env:esp32dev]
 platform = espressif32
-board = esp32doit-devkit-v1
+board = esp32dev
 framework = arduino
+
+; Enable LittleFS filesystem
+board_build.filesystem = littlefs
+board_build.partitions = default.csv
+
 upload_speed = 921600
 monitor_speed = 115200
 
 lib_deps =
-    ESP-NOW
-    WiFi
-    ESPAsyncWebServer
-    AsyncTCP
-    ArduinoJson
-    LittleFS
-    Wire
-    Adafruit GFX Library
-    Adafruit SSD1306
+    adafruit/Adafruit GFX Library
+    adafruit/Adafruit SSD1306
+    https://github.com/me-no-dev/ESPAsyncWebServer.git
+    https://github.com/me-no-dev/AsyncTCP.git
+    bblanchon/ArduinoJson @ ^7.2.0
 ```
 
-#### 3.2 Copy Master Code
+ESP-NOW, WiFi, Wire, and LittleFS come from the ESP32 Arduino framework and are
+not listed as dependencies.
 
-1. Place your Master firmware code in `src/main.cpp`
-2. Code features:
-   - **WiFi AP Mode**: Creates network for dashboard
-   - **ESP-NOW**: Receives data from slaves
-   - **OLED Display**: Shows system status
-   - **WebSocket Server**: Real-time dashboard updates
-   - **Two-Phase System**: LISTEN ↔ READY modes
-   - **Battery Monitoring**: 3-zone system
+#### 3.2 Master firmware
+
+`firmware/master/src/main.cpp` provides:
+
+   - **WiFi AP mode**: creates `QuizBuzzer_AP` for the dashboard
+   - **ESP-NOW**: receives packets from team units
+   - **OLED**: shows channel, connected count, and phase
+   - **WebSocket server**: pushes state updates to the dashboard
+   - **Two-phase flow**: LISTEN ↔ READY, with ANSWERED on a win
+   - **Battery tracking**: records each unit's zone and percentage
+   - **Power switch**: standby mode stops WiFi, ESP-NOW, and the web server
 
 #### 3.3 Pin Configuration
 
@@ -115,129 +120,177 @@ lib_deps =
 #define LED_READY 16        // GPIO 16
 #define POWER_SWITCH 25     // GPIO 25
 
-// OLED: SDA=GPIO 21, SCL=GPIO 22 (I2C)
+// OLED: SDA=GPIO 21, SCL=GPIO 22 (I2C), address 0x3C
 ```
 
-#### 3.4 Upload Master Code
+#### 3.4 Build and flash the master
 
-**Using PlatformIO:**
 ```bash
-# Plug in Master ESP32
-pio run -t upload
-pio device monitor  # View serial output
+cd firmware/master
+pio run --target upload
+pio device monitor --baud 115200
 ```
 
-**Expected Output:**
+**Expected output:**
 ```
 ✅ LittleFS initialized!
+🔴 STANDBY mode
+```
+
+Flip the power switch on the master to start the system:
+```
+🟢 SYSTEM ENABLED
+📡 AP IP: 192.168.4.1
+🔑 MAC: AA:BB:CC:DD:EE:FF
 ✅ ESP-NOW initialized
-🌐 WebSocket server started!
+✅ Web server started
 📢 Starting in LISTEN mode
 ```
 
+Record the MAC address printed here: every team unit needs it in `masterMAC`.
+
 ---
 
-### STEP 4: Slave ESP32 Setup
+### STEP 4: Team Unit ESP32 Setup
 
-#### 4.1 Create Slave Project
+#### 4.1 PlatformIO project
 
-**platformio.ini:**
+`firmware/slave/platformio.ini` as shipped:
+
 ```ini
 [env:esp32doit-devkit-v1]
 platform = espressif32
 board = esp32doit-devkit-v1
 framework = arduino
-upload_speed = 921600
 monitor_speed = 115200
-
-lib_deps =
-    ESP-NOW
-    WiFi
 ```
 
-#### 4.2 Copy Slave Code
+No `lib_deps` are needed: the team unit uses only ESP-NOW and WiFi, both of
+which the ESP32 Arduino framework provides.
 
-1. Place slave firmware code in `firmware/slave/src/main.cpp`
-2. Code features:
-   - **ESP-NOW**: Connects to master
-   - **Button Input**: Detects button press
-   - **Battery Monitoring**: Reports battery level
-   - **LED Feedback**: Shows connection & ready status
-   - **Team ID**: Configurable per slave
+#### 4.2 Firmware features
 
-#### 4.3 Slave Configuration
+`firmware/slave/src/main.cpp`:
 
-Before uploading, set **Team ID** in slave code:
+   - **ESP-NOW**: sends packets to the master
+   - **Button**: interrupt-driven, on GPIO 4
+   - **Buzzer**: sounds for 1 s on a press
+   - **LEDs**: action (GPIO 2), sync (GPIO 15), battery (GPIO 27)
+   - **Battery**: reads the divider on GPIO 34, reports percentage and zone
+   - **Team ID**: configurable per unit
+
+#### 4.3 Configure each unit
+
+Before every flash, set the unit's ID in `firmware/slave/src/main.cpp`:
 
 ```cpp
-#define TEAM_ID 1  // Set 1-10 for each slave
-
-// Button & LED pins
-#define BUTTON_PIN 33      // Button GPIO
-#define STATUS_LED 25      // Status LED GPIO
-#define READY_LED 26       // Ready LED GPIO
+#define TEAM_ID 1                                              // 1-10, unique per unit
+uint8_t masterMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};  // replace with master MAC
 ```
 
-#### 4.4 Upload Slave Code to Each Unit
+Boot the master once and read its MAC address from the serial monitor, then paste
+it into `masterMAC`. The shipped all-`0xFF` value is a broadcast address, which
+works but is not specific to your master.
+
+Pin assignments are fixed in the firmware and must match the wiring in
+[HARDWARE_SETUP.md](HARDWARE_SETUP.md):
+
+```cpp
+#define BUTTON_PIN 4        // button, internal pull-up
+#define LED_ACTION 2        // red, 2 s on press
+#define LED_SYNC 15         // green, connection status
+#define LED_BATTERY 27      // blue, battery health
+#define BUZZER_PIN 5        // 1 s on press
+#define BATTERY_PIN 34      // ADC, battery divider
+```
+
+#### 4.4 Upload to each unit
 
 ```bash
 cd firmware/slave
 
-# For each slave:
-# 1. Edit TEAM_ID (1-10)
-# 2. Upload
-pio run -t upload
-pio device monitor
+# For each unit:
+# 1. Edit TEAM_ID (1-10, unique)
+# 2. Edit masterMAC if you want unicast instead of broadcast
+# 3. Upload
+pio run --target upload
+pio device monitor --baud 115200
 ```
 
-**Repeat for 10 slaves** (Team 1 through Team 10)
+**Repeat for all 10 units.**
 
 ---
 
 ### STEP 5: Dashboard Setup
 
-#### 5.1 File Structure
+#### 5.1 File structure
 
 ```
 dashboard/data/
-├── index.html      (Your dashboard HTML)
-├── style.css       (Your dashboard CSS)
-└── script.js       (Your dashboard JavaScript)
+├── index.html      dashboard markup
+├── style.css       stylesheet
+└── script.js       WebSocket client, audio, confetti
 ```
 
-#### 5.2 Copy Dashboard Files
+#### 5.2 Flash the dashboard
 
-1. **index.html**: Paste your HTML code
-2. **style.css**: Paste your CSS code
-3. **script.js**: Paste your JavaScript code
+These files are already in the repository. `firmware/master/platformio.ini`
+declares `data_dir = ../../dashboard/data`, so PlatformIO picks them up
+automatically:
 
-#### 5.3 Key Dashboard Features
+```bash
+cd firmware/master
+pio run --target uploadfs
+```
 
-**HTML Elements:**
+The build lists the files it will write:
+
+```
+Building FS image from '.../dashboard/data' directory to .pio/build/esp32dev/littlefs.bin
+/index.html
+/script.js
+/style.css
+```
+
+Edit any file in `dashboard/data/` and re-run the command to push the change to
+the master.
+
+The master serves these at:
+
+| Path | Content type |
+|------|--------------|
+| `/` | `index.html` |
+| `/style.css` | `text/css` |
+| `/script.js` | `application/javascript` |
+
+#### 5.3 Dashboard features
+
+**HTML elements:**
 - Audio toggle button (top right)
 - Team status panel (left)
-- Winner display (center)
+- Phase and winner display (centre)
 - System info panel (right)
-- Confetti animation
-- Response list
+- Confetti container
+- Response order list
 
-**CSS Styling:**
-- Dark theme (#0a0e27 background)
+**CSS styling:**
+- Dark theme (`#0a0e27` background)
 - Gradient panels
-- Animations (breathe, pulse, confetti-fall)
+- Animations: `breathe`, `pulse`, `confetti-fall`
 - Responsive grid layout
-- Color schemes:
-  - LISTEN: Orange (#ff8800)
-  - READY: Pink/Red (#f5576c)
-  - WINNER: Green (#38ef7d)
+- Phase colours:
+  - LISTEN: orange (`#ff8800`)
+  - READY: pink (`#f093fb` → `#f5576c`)
+  - WINNER: green (`#11998e` → `#38ef7d`)
 
-**JavaScript Features:**
-- WebSocket connection
-- Real-time updates
-- Audio toggle
-- Battery monitoring
-- Team status tracking
-- Confetti animation
+**JavaScript features:**
+- WebSocket connection to `ws://<host>/ws`, with reconnect
+- Phase tracking and phase-change audio
+- Web Audio API buzzer, reset, online, offline and winner sounds
+- Background music loop during READY
+- Speech synthesis announcing the winning team
+- Confetti on a winner
+- Battery zone display per team
 
 ---
 
@@ -249,62 +302,61 @@ dashboard/data/
 2. Watch OLED display
 3. Should show: "LISTEN", "CH:1", "Teams: 0/10"
 
-### Test 2: Slave Connection
+### Test 2: Team Unit Connection
 
-1. Power on Slave Unit 1
-2. Serial output: "✅ Team 1 connected!"
-3. Master OLED: "Teams: 1/10"
+1. Power on team unit 1
+2. Master serial: `✅ Team 1 connected! | Battery: 100% (🔋 GREEN)`
+3. Master OLED: `Teams: 1/10`
 
 ### Test 3: Dashboard Access
 
-1. Open browser
-2. Go to: **http://192.168.4.1**
+1. Join WiFi network `QuizBuzzer_AP` (password `12345678`)
+2. Open **http://192.168.4.1**
 3. Should see:
-   - Header: "REC QUIZ BUZZER SYSTEM"
-   - Left panel: Team status
-   - Center: "READY" display
-   - Right: System info
-   - Audio toggle button (top-right)
+   - Header: "QUIZ BUZZER SYSTEM"
+   - Left panel: team status
+   - Centre: phase display, starting at LISTEN
+   - Right: system info
+   - Audio toggle button (top right)
 
 ### Test 4: System Phases
 
-**LISTEN Mode:**
-- Master OLED: "LISTEN ?"
-- Dashboard center: "READY" (standing by)
-- Slave presses button: **IGNORED**
+**LISTEN mode:**
+- Master OLED: `LISTEN ?`
+- Dashboard centre: `LISTEN / Question Being Asked`
+- Team unit presses button: **IGNORED** (master logs
+  `buzzed in LISTEN mode (ignored)`)
 
-**READY Mode:**
-1. Press Reset button on Master
-2. Master OLED: "READY"
-3. Slave presses button: **BUZZER REGISTERED**
-4. First to press: Winner display shows (green gradient)
-5. Dashboard updates with response order
+**READY mode:**
+1. Press RESET on the master
+2. Master OLED: `READY`
+3. A team unit press is **REGISTERED**
+4. First press wins: OLED shows `BUZZED! T<n>`, dashboard shows the winner
+5. Dashboard lists the response order
 
 ### Test 5: Complete Quiz Round
 
-1. **LISTEN Phase**: Reading question
-   - Slaves cannot buzz
-   - Master displays orange "LISTEN ?"
-   
-2. **Press Reset** → READY Phase
-   - Master displays pink "READY"
-   - Teams can now buzz
-   
-3. **Team Buzzes**
-   - First team's button press registered
-   - LED lights on master
-   - Dashboard shows: WINNER + Team ID
-   - Confetti animation
-   - Audio plays (if enabled)
-   
-4. **All teams respond** (within 200ms window)
-   - Response order list updates
-   - Shows position, team, response time
-   
-5. **Press Reset** → Back to LISTEN
-   - Clears winner
-   - Resets for next question
-   - Back to orange "LISTEN ?"
+1. **LISTEN phase**: question is being read
+   - Team presses are ignored
+   - Master shows `LISTEN ?`
+
+2. **Press RESET** → READY phase
+   - Master shows `READY`
+   - Teams can buzz
+
+3. **A team buzzes**
+   - First press is registered
+   - LED_WINNER lights on the master
+   - Dashboard shows the winner and team ID
+   - Confetti, jingle, and voice announcement
+   - The press is broadcast after a 200 ms batching window
+
+4. **Further teams respond**
+   - Response order list updates with position, team, and timestamp
+
+5. **Press RESET** → back to LISTEN
+   - Winner cleared, response list cleared
+   - Back to `LISTEN ?`
 
 ---
 
@@ -329,10 +381,15 @@ Channel: 1
 ### ESP-NOW Configuration
 
 ```cpp
-#define WIFI_CHANNEL 1          // Must match master
-#define MAX_TEAMS 10            // Maximum 10 slaves
-#define HEARTBEAT_TIMEOUT 5000  // 5 seconds
-#define BATCH_WINDOW 200        // 200ms response batching
+// Master
+#define WIFI_CHANNEL 1          // both sides must match
+#define MAX_TEAMS 10            // maximum team units
+#define HEARTBEAT_TIMEOUT 5000  // drop a unit after 5 s of silence
+#define BATCH_WINDOW 200        // broadcast 200 ms after a press
+
+// Team unit
+#define HEARTBEAT_INTERVAL 2000 // heartbeat every 2 s
+#define CONNECTION_TIMEOUT 3000 // considered offline after 3 s
 ```
 
 ---
@@ -341,42 +398,87 @@ Channel: 1
 
 ### Master Console Typical Output
 
+Boot with the power switch off:
 ```
+✅ LittleFS initialized!
 ╔═══════════════════════════════════════════╗
-║  REC QUIZ BUZZER - TWO PHASE SYSTEM      ║
+║  QUIZ BUZZER - TWO PHASE SYSTEM           ║
 ╚═══════════════════════════════════════════╝
-🟢 Starting system...
-📡 AP IP: 192.168.4.1
-🔑 MAC: AA:BB:CC:DD:EE:FF
-✅ ESP-NOW initialized
-🌐 WebSocket server started!
-   URL: http://192.168.4.1
+🔴 STANDBY mode
+```
 
+After flipping the switch on:
+```
+🟢 SYSTEM ENABLED
+📡 AP IP: 192.168.4.1
+✅ ESP-NOW initialized
+✅ Web server started
 📢 Starting in LISTEN mode
    Press RESET to enter READY mode
+```
 
+With units connected:
+```
 ✅ Team 1 connected! | Battery: 100% (🔋 GREEN)
 ✅ Team 2 connected! | Battery: 98% (🔋 GREEN)
-...
-===================================
+```
+
+On a press:
+```
+=====================================
 🏆 FIRST TO BUZZ: Team 3
 ⏱️  Timestamp: 1234567890 μs
-===================================
+=====================================
 📝 Response #1: Team 3
 📝 Response #2: Team 5
+📦 Batch broadcast sent!
 ```
 
-### Slave Console Typical Output
+If a unit presses during LISTEN:
+```
+🚫 Team 3 buzzed in LISTEN mode (ignored)
+```
+
+If the same unit presses twice in one round:
+```
+⚠️ Team 3 already responded
+```
+
+If a unit goes quiet for more than 5 s:
+```
+❌ Team 3 DISCONNECTED
+```
+
+### Team Unit Console Typical Output
 
 ```
-🔇 Sound OFF
-📡 ESP-NOW Initialized
-🔍 Scanning for master AP...
-✅ Master found! Connecting...
-🔗 Connected to Quiz Buzzer AP
-🎯 Team ID: 3
-📡 Sending heartbeat...
-✅ Connected to master
+╔═══════════════════════════════════════════╗
+║  QUIZ BUZZER - TEAM UNIT FIRMWARE         ║
+╚═══════════════════════════════════════════╝
+🏷️  Team ID: 1
+🔑 MAC Address: AA:BB:CC:DD:EE:FF
+═══════════════════════════════════════════
+✅ ESP-NOW initialized!
+✅ Master peer added!
+🔋 Battery: 4.02V (99%) - 🔋 GREEN
+🔍 Searching for Master...
+⚡ Interrupt-based system ACTIVE
+```
+
+On a press:
+```
+════════════════════════════════════
+🔴 BUTTON PRESSED!
+⏱️  Timestamp: 1234567890 μs
+════════════════════════════════════
+📡 Signal sent to Master!
+🔊 Buzzer: ON for 1 second
+🔴 Red LED: ON for 2 seconds
+```
+
+If the battery zone changes:
+```
+⚠️ BATTERY ZONE CHANGED: ⚠️ YELLOW (Charge soon!)
 ```
 
 ---
@@ -391,39 +493,41 @@ Channel: 1
 - Check USB cable connection
 - Try uploading again
 
-### Problem: Slaves can't connect
+### Problem: Team units can't connect
 
 **Solution:**
-- Check WiFi channel (must be 1)
-- Verify Team IDs are 1-10
-- Check SSID: "QuizBuzzer_AP"
-- Restart master first, then slaves
+- Check WiFi channel (must be 1 on both sides)
+- Verify each unit's `TEAM_ID` is unique and in 1-10
+- Check the unit's `masterMAC` matches the master's printed MAC
+- Restart the master first, then the units
 
 ### Problem: Dashboard won't load
 
 **Solution:**
-1. Check IP: http://192.168.4.1
-2. Verify connected to "QuizBuzzer_AP"
-3. Check browser console (F12) for errors
-4. Try different browser
-5. Clear cache
+1. Check the URL: http://192.168.4.1
+2. Confirm you are joined to `QuizBuzzer_AP`
+3. Check the browser console (F12) for errors
+4. Try a different browser
+5. Clear the cache
 
-### Problem: Slave button not responding
-
-**Solution:**
-- Check button pin connection
-- Verify READY mode is active
-- Check serial output for team connection
-- Test with slave's serial monitor
-- Verify battery level (not below 40%)
-
-### Problem: Response order incorrect
+### Problem: Team unit button not responding
 
 **Solution:**
-- Check master's timestamp accuracy
-- Verify all slaves' clocks sync
-- Check ESP-NOW range
-- Test with shorter distances first
+- Check the button is on GPIO 4 and returns to GND
+- Confirm the master is in READY mode, not LISTEN
+- Watch the master's serial output for the unit
+- Watch the unit's own serial output for `BUTTON PRESSED!`
+- Check the green LED is solid, meaning the unit has a master
+
+### Problem: Response order looks wrong
+
+Teams are ranked by the order presses reach the master, not by the timestamp on
+each unit. See [API_REFERENCE.md](API_REFERENCE.md) for the details. Things that
+affect the order:
+
+- Signal strength: units further from the master arrive later
+- WiFi interference on channel 1
+- Units whose `TEAM_ID` collide are indistinguishable
 
 ---
 
@@ -442,43 +546,43 @@ pio device monitor --baud 115200
 # 🪫 Battery status
 ```
 
-### Check Slave Status
+### Check Team Unit Status
 
 ```bash
-# Connect each slave to monitor
+# Monitor each unit over USB
 # Look for:
-# 🔗 Connected to master
-# 📡 Heartbeat sent
+# 🏷️  Team ID
 # 🔋 Battery level
-# ✅ Ready for buzzing
+# 🔴 BUTTON PRESSED!
 ```
 
 ### Dashboard Monitoring
 
-- **Left Panel**: Team online/offline status
-- **Right Panel**: Battery health (Green/Yellow/Red)
-- **Center**: Response order in real-time
-- **Top Right**: Audio toggle status
+- **Left panel**: team online/offline status and battery zone
+- **Right panel**: battery health counts and system info
+- **Centre**: phase display, winner, and response order
+- **Top right**: audio toggle status
 
 ---
 
-## 🎯 NEXT STEPS
+## 🎯 Next Steps
 
-1. ✅ Upload all code (Master + 10 Slaves)
-2. ✅ Connect to dashboard
-3. ✅ Run test quiz rounds
-4. ✅ Monitor battery levels
-5. ✅ Test audio feedback
-6. ✅ Run full competition
+1. Flash the master and all team units
+2. Flash the dashboard
+3. Run test rounds with the units close to the master
+4. Check battery readings
+5. Test the audio with sound enabled
+6. Move units to their real positions
 
 ---
 
-## 📞 SUPPORT
+## 📞 Support
 
-- **Serial Monitor**: Best for debugging
-- **Dashboard**: Monitor real-time status
-- **GitHub Issues**: Report problems
-- **Documentation**: See README.md
+- **Serial monitor**: the most detailed source of information
+- **Dashboard**: live system state
+- **GitHub issues**: report problems
+- **Docs**: [README.md](README.md), [TROUBLESHOOTING.md](TROUBLESHOOTING.md),
+  [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
 
 ---
 
