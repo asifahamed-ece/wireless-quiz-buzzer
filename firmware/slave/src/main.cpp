@@ -12,10 +12,10 @@
  *  
  * Hardware Connections:
   * - Button: GPIO 4 (with internal pull-up)
-  * - LED Action (Red): GPIO 2 (ON for 2 seconds after press)  // ← FIX THIS
+  * - LED Action (Red): GPIO 2 (ON for 2 seconds after press)
   * - LED Sync (Green): GPIO 15 (connection status)
   * - LED Battery (Blue): GPIO 27 (battery indicator)
-  * - Buzzer: GPIO 5 (beeps for 1 second after press)  // ← FIX THIS
+  * - Buzzer: GPIO 5 (beeps for 1 second after press)
   * - Battery ADC: GPIO 34
  *  
  *  Developer: ASIF AHAMED S | ECE 2023-27
