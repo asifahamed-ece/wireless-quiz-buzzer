@@ -27,23 +27,31 @@
 #include <WiFi.h>
 
 // ═══════════════════════════════════════════════════════════
-//  ⚠️ CONFIGURATION REQUIRED FOR EACH TEAM NODE:
+//  ⚠️ CONFIGURATION REQUIRED FOR EACH TEAM UNIT:
 // 
-//  1. Change TEAM_ID (line 20):
-//     #define TEAM_ID 1  // Change to 1-10
+//  Flash this firmware once per team unit, changing TEAM_ID each time.
+//  Every unit must have a different TEAM_ID in the range 1-10, otherwise
+//  the master cannot tell them apart.
+//
+//  1. Set TEAM_ID to this unit's number:
+//     #define TEAM_ID 1   // 1-10, unique per unit
 // 
-//  2. Update masterMAC (line 21) with your Master's MAC:
-//     Find Master MAC from Serial Monitor on first boot
-//     Format: {0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX}
+//  2. Set masterMAC to the master unit's MAC address:
+//     Boot the master once and read the address from its serial monitor,
+//     which prints it as "MAC: AA:BB:CC:DD:EE:FF".
+//     Format: {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+//     The default all-0xFF value below is a broadcast address. It works,
+//     but every unit then talks to any ESP-NOW traffic on the channel
+//     rather than to your master alone.
 // 
-//  3. Battery calibration (if needed):
-//     - MAX_BATTERY_VOLTAGE (line 32): 4.08V for your batteries
-//     - Adjust if different battery type used
+//  3. Battery calibration (only if you use a different cell chemistry):
+//     MAX_BATTERY_VOLTAGE is 4.08V for 18650 Li-ion cells. If you use
+//     a different battery, set it to that cell's full-charge voltage.
 // ═══════════════════════════════════════════════════════════
 
 
-#define TEAM_ID 7
-uint8_t masterMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};  // Update master MAC ⚠️
+#define TEAM_ID 1
+uint8_t masterMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};  // Replace with your master's MAC
 // ═══════════════════════════════════════════════════
 
 // Pin Definitions
