@@ -6,8 +6,9 @@ First off, thank you for considering contributing to this project! 🎉
 - [Code of Conduct](#code-of-conduct)
 - [How Can I Contribute?](#how-can-i-contribute)
 - [Development Process](#development-process)
-- [Style Guidelines](#style-guidelines)
+- [Code Style Guidelines](#code-style-guidelines)
 - [Commit Messages](#commit-messages)
+- [Branch Naming](#branch-naming)
 
 ## Code of Conduct
 
@@ -54,7 +55,7 @@ Feature requests are welcome! Please provide:
 
 ### Pull Requests
 
-1. **Fork the repo** and create your branch from `main`
+1. **Fork the repo** and create your branch from `Main`
 2. **Make your changes** with clear commits
 3. **Test thoroughly** on actual hardware
 4. **Update documentation** if needed
@@ -76,7 +77,7 @@ git checkout -b feature/amazing-feature
 
 # Keep your branch updated
 git fetch upstream
-git rebase upstream/main
+git rebase upstream/Main
 ```
 
 ### Testing Requirements
@@ -124,35 +125,39 @@ let currentPhase = "LISTEN";  // Good
 ## Commit Messages
 
 ### Format
+
+One line, imperative mood, 72 characters or fewer:
+
 ```
-Type: Brief description (50 chars or less)
-
-More detailed explanation if needed (wrap at 72 chars).
-- Bullet points okay
-- Use present tense
-
-Fixes #123
+docs: correct pin table against the firmware
+fix: drop ignored timestamp from the receive path
+build: re-encode platformio.ini as UTF-8
 ```
 
-### Types
-- **Add:** New feature
-- **Fix:** Bug fix
-- **Update:** Modify existing feature
-- **Remove:** Delete code/feature
-- **Refactor:** Code restructuring
-- **Docs:** Documentation only
-- **Style:** Formatting, no code change
-- **Test:** Add/modify tests
+Keep the body out of the commit message. The diff already lists the changed
+files, and the reason belongs in the pull request description or an issue
+reference.
+
+### Prefixes
+
+Use a prefix where it helps scanning. Omit it for trivial changes.
+
+| Prefix | Use for |
+|--------|---------|
+| `feat:` | New capability |
+| `fix:` | Bug fix |
+| `docs:` | Documentation only |
+| `refactor:` | Restructuring with no behaviour change |
+| `build:` | Build system or dependencies |
+| `chore:` | Maintenance that fits nowhere else |
+| `test:` | Adding or changing tests |
 
 ### Examples
+
 ```
-Add: Two-phase quiz system (LISTEN/READY)
-
-Implemented phase-based quiz flow:
-- LISTEN: Question being read, buzzers ignored
-- READY: Buzzers active, BGM playing
-
-Fixes #42
+docs: correct battery thresholds in API reference
+fix: master MAC banner was one character short
+chore: remove resolved TODO markers from team firmware
 ```
 
 ## Branch Naming

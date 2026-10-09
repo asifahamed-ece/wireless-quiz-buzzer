@@ -41,6 +41,7 @@ body {
   letter-spacing: 0.5px; 
 }
 .teams-container { flex: 1; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
+.loading-message { color: #aaa; font-size: 0.85em; }
 .team-status { 
   display: flex; 
   align-items: center; 

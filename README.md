@@ -13,7 +13,8 @@
 
 ---
 
-*A wireless, real-time quiz buzzer system with microsecond precision timing, live dashboard, and professional features for academic competitions.*
+*A wireless, real-time quiz buzzer system for up to 10 teams, with arrival-order
+ranking, a live dashboard, and standalone operation — no internet required.*
 
 </div>
 
@@ -27,8 +28,8 @@
 
 ### Hardware Features
 -  **10 Independent Teams** with wireless ESP-NOW communication
--  **Sub-millisecond Response Time** (<10ms precision with microsecond timestamps)
--  **50+ Meter Range** (2.4GHz wireless)
+-  **Press Ranking by Arrival Order** (first packet received at the master wins)
+-  **2.4GHz Wireless** (tens of metres indoors; not formally measured)
 -  **Real-time Battery Monitoring** (3-zone health system)
 -  **OLED Display** with phase indicators
 -  **Physical Controls** (reset button, power switch)
@@ -41,12 +42,12 @@
 -  **Audio Feedback** (buzzer sounds, winner jingles, voice announcements)
 -  **Visual Effects** (confetti animations, smooth transitions)
 -  **Team Status Panel** (online/offline, battery levels)
--  **Response Order Display** (with precise timestamps)
+-  **Response Order Display** (with arrival timestamps)
 -  **Mobile Responsive** design
 
 ### Software Features
 -  **Smart Broadcast System** (priority-based throttling)
--  **Debounce Protection** (1-second cooldown on reset)
+-  **Debounce Protection** (50 ms button debounce, 1 s reset cooldown)
 -  **Heartbeat Monitoring** (automatic disconnect detection)
 -  **Batch Response Processing** (200ms window optimization)
 -  **Modern Web Standards** (HTML5, CSS3, ES6+)
@@ -94,32 +95,43 @@ git clone https://github.com/asifahamed-ece/wireless-quiz-buzzer.git
 cd wireless-quiz-buzzer
 ```
 
-#### 2️⃣ Flash Master ESP32
+#### 2️⃣ Flash the Master
 ```bash
 cd firmware/master
 pio run --target upload
-cd ../..
+pio device monitor --baud 115200   # read the AP IP and MAC address
 ```
 
-#### 3️⃣ Upload Dashboard Files
+The master boots into standby. Flip its power switch to start the system.
+
+#### 3️⃣ Flash the Dashboard
 ```bash
-cd dashboard/data
+cd firmware/master
 pio run --target uploadfs
-cd ../..
 ```
 
-#### 4️⃣ Flash Slave ESP32 (Repeat for all 10 teams)
+`firmware/master/platformio.ini` sets `data_dir` to `dashboard/data`, so this
+packages `index.html`, `style.css`, and `script.js` into the master's LittleFS.
+
+#### 4️⃣ Flash the Team Units (repeat for all 10)
+Before each flash, open `firmware/slave/src/main.cpp` and set:
+
+```cpp
+#define TEAM_ID 1                                              // unique per unit, 1-10
+uint8_t masterMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};  // from the master's serial output
+```
+
+Then:
+
 ```bash
 cd firmware/slave
-# Edit src/main.cpp and change TEAM_ID (1-10)
 pio run --target upload
-cd ../..
 ```
 
-#### 5️⃣ Connect to Dashboard
-1. Power ON master unit
-2. Connect to WiFi: `QuizBuzzer_AP` (Password: `12345678`)
-3. Open browser: `http://192.168.4.1`
+#### 5️⃣ Connect to the Dashboard
+1. Power ON the master and flip its power switch
+2. Join WiFi network `QuizBuzzer_AP` (password `12345678`)
+3. Open `http://192.168.4.1`
 
 ---
 
@@ -176,7 +188,7 @@ cd ../..
 
 **Winner Announcement**
 <img src="images/Web3.png" alt="Dashboard - Winner Display" width="450">
-*ANSWERED phase showing winning team with precise response timestamp*
+*ANSWERED phase showing the winning team and its arrival timestamp*
 
 **Team Status Panel**
 <img src="images/Web4.png" alt="Dashboard - Team Monitoring" width="450">
@@ -282,10 +294,10 @@ cd ../..
 
 | Feature | Specification |
 |---------|---------------|
-| **Response Time** | < 10 millisecond |
-| **Timing Precision** | Microsecond (μs) timestamps |
+| **Ranking Method** | Order of arrival at the master |
+| **Timestamp Source** | Master `micros()` at packet arrival |
 | **Communication Protocol** | ESP-NOW (IEEE 802.11) |
-| **Wireless Range** | 50+ meters (line of sight) |
+| **Wireless Range** | Not formally measured; expect tens of metres indoors, further with line of sight |
 | **Max Teams** | 10 simultaneous |
 | **Dashboard Update Rate** | Real-time (WebSocket) |
 | **Battery Monitoring** | 3-zone system (Green/Yellow/Red) |
@@ -293,20 +305,44 @@ cd ../..
 | **Audio** | Web Audio API + Speech Synthesis |
 | **Browser Support** | Chrome, Edge, Safari, Firefox |
 
+### About the timing figures
+
+Teams are ranked by the order in which presses reach the master — the first
+packet it processes wins. That ordering is meaningful for units sitting close
+together on a quiet channel.
+
+The millisecond figure shown on the dashboard is **not** a measured reaction
+time. Each team unit timestamps its own press with `micros()` and sends that
+value, but the master currently records its own `micros()` on arrival instead,
+so the displayed number is the master's uptime at that moment.
+
+Producing a true response time would mean subtracting the unit's timestamp and
+synchronising unit clocks to the master. Both sides would need firmware
+changes; neither is implemented today. The packet field is already there, so
+the work is contained. See
+[API_REFERENCE.md](API_REFERENCE.md#-timing-and-response-calculation) for the
+details.
+
+---
+
+## 📚 Documentation
+
+| Document | Covers |
+|----------|--------|
+| [HARDWARE_SETUP.md](HARDWARE_SETUP.md) | Components, pin assignments, wiring, bill of materials |
+| [SOFTWARE_SETUP.md](SOFTWARE_SETUP.md) | Flashing firmware and the dashboard, network configuration |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | Command cheatsheet, pin map, expected serial output |
+| [API_REFERENCE.md](API_REFERENCE.md) | ESP-NOW packets, WebSocket messages, battery algorithm |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-driven fixes |
+| [COMPLETE_DOCS.md](COMPLETE_DOCS.md) | Index of every document |
+
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how you can help:
-
-### Ways to Contribute
-- 🐛 Report bugs and issues
-- 💡 Suggest new features
-- 📝 Improve documentation
-- 🔧 Submit pull requests
-- ⭐ Star the repository
-
-[📋 Contribution Guidelines](CONTRIBUTING.md)
+Bug reports, feature requests, documentation fixes, and pull requests are all
+welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for expectations in project spaces.
 
 ---
 

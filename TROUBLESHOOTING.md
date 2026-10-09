@@ -6,7 +6,7 @@
 1. Check power (all devices powered on?)
 2. Check serial output (errors?)
 3. Check WiFi connection (dashboard loading?)
-4. Restart master first, then slaves
+4. Restart the master first, then the units
 5. See specific issue below
 
 ---
@@ -121,61 +121,56 @@ Tools → Serial Monitor → Baud: 115200
 
 ## 🟠 CONNECTIVITY ISSUES
 
-### Master Can't Find Slaves
+### Master Sees No Team Units
 
 **Symptoms:**
 - Master OLED shows "Teams: 0/10"
-- Serial: No "Team X connected" messages
-- Dashboard shows no team status
+- No "Team X connected" line on the master's serial output
+- Dashboard shows no teams
 
-**Troubleshooting:**
+**Check the unit's own serial output first.** Plug it in over USB:
 
-**Check Slave Power:**
-```bash
-# Plug in slave unit
-# Serial output should show:
-✅ Connected to master AP
-🎯 Team ID: 1
-📡 Sending heartbeat...
+```
+🏷️  Team ID: 1
+🔑 MAC Address: AA:BB:CC:DD:EE:FF
+✅ ESP-NOW initialized!
+✅ Master peer added!
+🔍 Searching for Master...
 ```
 
-**If no output:**
-1. Check slave USB connection
-2. Verify correct firmware uploaded
-3. Check Team ID is 1-10
-4. Verify WiFi password: "12345678"
+If those lines appear, the unit booted correctly and the problem is between the
+two: check `masterMAC` and `TEAM_ID`.
 
-**Check WiFi SSID:**
+**If nothing appears at all:**
+1. Check the USB cable is a data cable
+2. Confirm the firmware actually uploaded
+3. Check the baud rate is 115200
+
+**Check the master's AP credentials:**
+
 ```cpp
-// In Master Code:
+// firmware/master/src/main.cpp
 WiFi.softAP("QuizBuzzer_AP", "12345678", WIFI_CHANNEL);
-
-// Verify SSID is exactly: "QuizBuzzer_AP"
-// Password is exactly: "12345678"
 ```
 
-**Check Channel:**
+**Check the channel matches on both sides:**
+
 ```cpp
-#define WIFI_CHANNEL 1  // Must be same on master and slaves!
+#define WIFI_CHANNEL 1
 ```
 
-**Multiple Slaves Not Connecting:**
-1. Start with one slave only
-2. Verify it connects
-3. Add second slave
-4. If fails: Check for duplicate Team IDs
-5. Restart master between adding slaves
+The master sets this on the AP and via `esp_wifi_set_channel`. The unit relies
+on the AP's channel.
 
-**Manual ESP-NOW Pairing:**
-```cpp
-// In master code, add debug output:
-Serial.print("Waiting for data on channel ");
-Serial.println(WIFI_CHANNEL);
+**If some units connect but others do not:**
+1. Add one unit at a time
+2. Check each prints a unique Team ID
+3. Look for two units flashed with the same `TEAM_ID`
 
-// In slave code, verify:
-Serial.print("Attempting to connect to channel ");
-Serial.println(WIFI_CHANNEL);
-```
+**Note on `masterMAC`:** the shipped value is all `0xFF`, a broadcast address.
+The unit's green LED goes solid when a send succeeds. With broadcast that can be
+a reply from any ESP-NOW traffic on the channel, so a solid LED does not prove
+your master is reachable. Setting the real MAC address removes the ambiguity.
 
 ---
 
@@ -198,8 +193,8 @@ If not working:
 3. Should show: "Reply from 192.168.4.1"
 4. If no reply: Master not properly broadcasting AP
 
-If Master OLED shows "192.168.4.1":
-- Try different browser (Chrome, Firefox, Safari)
+If pinging succeeds but the page does not load:
+- Try a different browser (Chrome, Firefox, Safari)
 - Clear browser cache (Ctrl+Shift+Delete)
 - Try Incognito/Private mode
 - Try different device (phone vs laptop)
@@ -251,7 +246,7 @@ Safari: Clear History...
 ### Buzzer Not Responding
 
 **Symptoms:**
-- Slave button press not detected
+- Team unit button press not detected
 - Dashboard doesn't show response
 - Serial shows: Team X connected, but no buzzer
 
@@ -267,7 +262,7 @@ Press RESET button on master
 
 **Check Button Connection:**
 ```cpp
-#define BUTTON_PIN 33  // Verify correct pin
+#define BUTTON_PIN 4   // Verify correct pin
 
 // Test button:
 1. Connect multimeter to button
@@ -288,8 +283,8 @@ In READY mode:
 - Press by different team: REGISTERED
 - Response limit: 10 responses per round
 
-Error message in serial:
-"❌ Team X already responded"
+Serial message:
+"⚠️ Team X already responded"
 ```
 
 **Master Serial Debug:**
@@ -318,7 +313,7 @@ Bad output:
 **Check System State:**
 ```
 System must be in READY mode:
-1. Master OLED: Pink "READY"
+1. Master OLED: "READY"
 2. Serial: "READY mode" shown
 3. Reset button: Press once to enter READY
 
@@ -383,60 +378,63 @@ testWinner();
 
 ---
 
-### Response Order Wrong
+### Response Order Looks Wrong
 
 **Symptoms:**
-- Faster team listed after slower team
-- Timestamps seem incorrect
-- Order doesn't match physical button presses
+- A unit that appears to have pressed first is listed lower
+- Timestamps in the response list look inconsistent
 
-**Timing Precision Check:**
+**How ranking actually works:**
+
+The master ranks teams purely by the order packets arrive in its receive
+callback. It does not compute a response time, and it does not compare the
+timestamps sent by the units.
+
 ```cpp
-// Master uses microseconds:
-unsigned long masterTime = micros();
-
-// Slave reports microseconds:
-unsigned long slaveTime = incomingData.timestamp;
-
-// Response time = Master - Slave
-// Accurate to microsecond (0.000001 sec)
+// master, on packet arrival
+unsigned long masterTimestamp = micros();   // its own clock
 ```
 
-**Common Causes:**
+**Common causes:**
 
 ```
-1. Different clock speeds
-   └─ Not fixable (design limitation)
+1. Signal strength
+   └─ A distant unit's packet arrives later even if it pressed first
+   └─ Move all units to the same distance for a fair test
 
-2. Long WiFi transmission time
-   └─ Check ESP-NOW range (should be <50m)
+2. WiFi interference on channel 1
+   └─ Channel 1 is crowded; nearby routers and access points share it
 
-3. Slave timestamp incorrect
-   └─ Slave micros() starting from wrong value
-   └─ Check: Serial output timestamp
+3. Duplicate TEAM_IDs
+   └─ Two units reporting the same ID are indistinguishable to the master
+   └─ Check each unit's serial output prints a unique Team ID
 
-4. Multiple responses in same microsecond
-   └─ Order undefined (rare)
-   └─ Usually fine for competitions
+4. Button bounce
+   └─ The unit debounces for 50 ms, so a very short press may be missed
+   └─ The master also ignores a unit that already responded this round
 
-5. Overflow (micros wraps at ~71 minutes)
-   └─ Only happens if system runs >71 minutes
-   └─ Restart system to reset
+5. Bottleneck from the master being busy
+   └─ OLED redraws and broadcasts run in the same loop
+   └─ The 200 ms batching window spreads updates across a round
 ```
 
 **Verification:**
 
 ```bash
-# Check master serial:
-📝 Response #1: Team 3 (1.234567 sec)
-📝 Response #2: Team 5 (1.456789 sec)
-
-# If times are close (within 0.001 sec):
-└─ Order should be correct
-
-# If times differ by 0.1+ sec:
-└─ Definitely correct order
+# Master serial shows arrival order directly:
+📝 Response #1: Team 3
+📝 Response #2: Team 5
 ```
+
+Place two units at equal distance from the master, press one, wait a second,
+then press the other. The order should match.
+
+> **On the millisecond figures:** the dashboard shows the master's uptime when
+> each press arrived, not a reaction time. Two units pressing in the same
+> millisecond will show identical values, and a later press can show a larger
+> number purely because more time has passed. Neither says anything about who
+> was faster. See
+> [API_REFERENCE.md](API_REFERENCE.md#-timing-and-response-calculation).
 
 ---
 
@@ -458,35 +456,46 @@ unsigned long slaveTime = incomingData.timestamp;
 ```
 
 **If not showing:**
-1. Slaves not connected
-2. Check heartbeat message (every 500ms)
-3. Verify battery code in slave firmware
+1. Units are not connected
+2. Battery data rides on every packet, including the 2 s heartbeat
+3. Check the unit's own serial output for its battery line
 
 **Check Dashboard Updates:**
 ```
 Right panel should show:
-Current Status: 🔋×8 ⚠️×1 🪫×1
+🔋×8 ⚠️×1 🪫×0
 
 If not updating:
-1. Refresh browser (F5)
-2. Check browser console (F12)
+1. Refresh the browser
+2. Check the browser console (F12)
 3. Look for WebSocket errors
 ```
 
-**Battery Calculation Verification:**
+**Verify the calculation by hand:**
+
 ```cpp
-// Expected formula:
-float voltage = 4.2;  // Max: 4.2V
-float percent = ((voltage - 3.0) / (4.2 - 3.0)) * 100;
-// Result: 100%
+// firmware/slave/src/main.cpp
+MAX_BATTERY_VOLTAGE = 4.08   // not 4.2
+MIN_BATTERY_VOLTAGE = 3.0
+voltage = voltage * (R1 + R2) / R2;   // x2 for the divider
 
-float voltage = 3.6;  // Mid: 3.6V
-float percent = ((voltage - 3.0) / (4.2 - 3.0)) * 100;
-// Result: ~50%
+// percent = (voltage - 3.0) / (4.08 - 3.0) * 100
+//   4.08 V -> 100%
+//   3.54 V ->  50%
+//   3.00 V ->   0%
+```
 
-float voltage = 3.0;  // Min: 3.0V
-float percent = ((voltage - 3.0) / (4.2 - 3.0)) * 100;
-// Result: 0%
+**If every unit reports RED or 0%:** the divider is probably missing or the
+wrong ratio. The firmware multiplies the ADC reading by 2 unconditionally, so
+without two equal 10 kΩ resistors every unit reads about half the real voltage.
+Check GPIO 34 first.
+
+**Zone thresholds are in volts, not percent:**
+
+```
+>= 3.70 V  GREEN
+>= 3.45 V  YELLOW
+<  3.45 V  RED
 ```
 
 ---
@@ -594,12 +603,13 @@ Use this to isolate issues:
   └─ OLED shows startup message
   └─ Serial output visible
 
-□ Master starts (60 seconds)
-  └─ OLED shows IP: 192.168.4.1
-  └─ Serial: "WebSocket server started"
+□ Master starts (after flipping the power switch on)
+  └─ OLED shows "LISTEN ?"
+  └─ Serial: "📡 AP IP: 192.168.4.1" and "✅ Web server started"
 
-□ Slave 1 powers on
-  └─ Serial: "Connected to master AP"
+□ Team unit 1 powers on
+  └─ Its serial: "✅ Master peer added!" then "🔍 Searching for Master..."
+  └─ Master serial: "✅ Team 1 connected!"
   └─ Master OLED: "Teams: 1/10"
 
 □ Connect to WiFi
@@ -617,15 +627,15 @@ Use this to isolate issues:
 
 □ Press RESET (enter READY)
   └─ Master OLED: "READY"
-  └─ Dashboard center: Pink gradient
+  └─ Dashboard centre: READY state
 
 □ Team 1 presses button
   └─ Master OLED: "BUZZED! T1"
   └─ LED_WINNER: Lights up
   └─ Dashboard: Shows Team 1 as winner
 
-□ Add more slaves (repeat as needed)
-  └─ Each slave appears in dashboard
+□ Add more units (repeat as needed)
+  └─ Each unit appears in the dashboard
   └─ All connected status shows
 
 □ Complete quiz round
