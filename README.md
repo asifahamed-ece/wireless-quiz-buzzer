@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏆 REC Quiz Buzzer System 🏆
+# 🏆 Quiz Buzzer System 🏆
 
 ### Professional Real-Time Quiz Competition Platform
 
@@ -16,6 +16,10 @@
 *A wireless, real-time quiz buzzer system with microsecond precision timing, live dashboard, and professional features for academic competitions.*
 
 </div>
+
+<p align="center">
+   <img src="images/simplified.png" alt=Simplified Image of Buzzer" width="800">
+</p>
 
 ---
 
