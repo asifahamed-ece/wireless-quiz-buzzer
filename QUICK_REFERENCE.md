@@ -1,401 +1,202 @@
-# 🎯 QUICK REFERENCE - GITHUB UPLOAD IN 10 COMMANDS
+# ⚡ Quick Reference
 
-## ⚡ TL;DR (Quick Upload)
+Command cheatsheet for building, flashing, and running the system. For background
+explanation see the other guides; for a full walkthrough start with the README.
+
+## Contents
+
+- [Network details](#network-details)
+- [Clone](#clone)
+- [Per-unit configuration](#per-unit-configuration)
+- [Master](#master)
+- [Dashboard](#dashboard)
+- [Team units](#team-units)
+- [Serial monitor](#serial-monitor)
+- [Expected output](#expected-output)
+- [Hardware pin map](#hardware-pin-map)
+- [Build sizes](#build-sizes)
+- [Common problems](#common-problems)
+
+---
+
+## Network details
+
+| Setting | Value |
+|---------|-------|
+| WiFi SSID | `QuizBuzzer_AP` |
+| Password | `12345678` |
+| Dashboard URL | `http://192.168.4.1` |
+| WebSocket URL | `ws://192.168.4.1/ws` |
+| WiFi channel | 1 |
+| Max team units | 10 |
+
+The master runs a WiFi access point. It does not need an internet connection.
+
+## Clone
 
 ```bash
-# 1. Configure Git
-git config --global user.name "Asif Ahamed S"
-git config --global user.email "your-email@gmail.com"
-
-# 2. Navigate to project
-cd /path/to/REC-Quiz-Buzzer-System
-
-# 3. Initialize repository
-git init
-
-# 4. Add all files
-git add .
-
-# 5. Commit
-git commit -m "Initial commit: REC Quiz Buzzer System v1.0.0"
-
-# 6. Connect to GitHub
-git remote add origin https://github.com/YOUR_USERNAME/REC-Quiz-Buzzer-System.git
-
-# 7. Rename to main
-git branch -M main
-
-# 8. Push to GitHub
-git push -u origin main
-
-# 9. Go to GitHub and add topics
-# (Settings → Topics)
-
-# 10. Create Release
-# (Releases → Create new release → v1.0.0)
+git clone https://github.com/asifahamed-ece/wireless-quiz-buzzer.git
+cd wireless-quiz-buzzer
 ```
 
----
+## Per-unit configuration
 
-## 📋 CHECKLIST FOR GITHUB UPLOAD
+Each team unit is flashed separately with a unique ID. Edit
+`firmware/slave/src/main.cpp` before every flash:
 
-### Before Upload
-- [ ] All code files organized in folders
-- [ ] README.md downloaded and placed in root
-- [ ] LICENSE file in root
-- [ ] CONTRIBUTING.md in root
-- [ ] CODE_OF_CONDUCT.md in root
-- [ ] CHANGELOG.md in root
-- [ ] .gitignore in root
-- [ ] HARDWARE_SETUP.md in docs/
-- [ ] All firmware files in firmware/master/ and firmware/slave/
-- [ ] All dashboard files in dashboard/data/
-- [ ] Screenshots in docs/images/
-
-### During Upload
-- [ ] Git configured with name and email
-- [ ] Git initialized (git init)
-- [ ] All files added (git add .)
-- [ ] Initial commit created
-- [ ] Remote added (git remote add origin)
-- [ ] Pushed to main branch (git push -u origin main)
-
-### After Upload
-- [ ] Repository visible on GitHub
-- [ ] Topics/tags added (10+ tags)
-- [ ] Release created (v1.0.0)
-- [ ] Screenshots displaying
-- [ ] README showing correctly
-- [ ] License visible (MIT)
-- [ ] Project shared on social media
-
----
-
-## 📁 COMPLETE FOLDER STRUCTURE
-
-```
-REC-Quiz-Buzzer-System/
-├── .github/
-│   └── workflows/               (CI/CD workflows - optional)
-│
-├── .gitignore                   ✅ Created
-├── README.md                    ✅ Created
-├── LICENSE                      ✅ Created
-├── CONTRIBUTING.md              ✅ Created
-├── CODE_OF_CONDUCT.md          ✅ Created
-├── CHANGELOG.md                ✅ Created
-├── HARDWARE_SETUP.md           ✅ Created
-│
-├── firmware/
-│   ├── master/
-│   │   ├── src/
-│   │   │   └── main.cpp         (Master ESP32 code)
-│   │   ├── lib/
-│   │   └── platformio.ini
-│   │
-│   └── slave/
-│       ├── src/
-│       │   └── main.cpp         (Slave ESP32 code)
-│       ├── lib/
-│       └── platformio.ini
-│
-├── dashboard/
-│   ├── data/
-│   │   ├── index.html           (Dashboard HTML)
-│   │   ├── style.css            (Dashboard CSS)
-│   │   └── script.js            (Dashboard JS)
-│   └── upload-guide.md
-│
-├── docs/
-│   ├── README.md
-│   ├── HARDWARE_SETUP.md        ✅ Created
-│   ├── SOFTWARE_SETUP.md        (Create this)
-│   ├── USER_GUIDE.md            (Create this)
-│   ├── API_REFERENCE.md         (Create this)
-│   ├── TROUBLESHOOTING.md       (Create this)
-│   └── images/
-│       ├── dashboard-screenshot.png
-│       ├── system-diagram.png
-│       ├── hardware-assembly.jpg
-│       └── wiring-diagram.png
-│
-├── hardware/
-│   ├── BOM.md
-│   ├── schematics/
-│   │   ├── master-schematic.png
-│   │   └── slave-schematic.png
-│   └── pcb/
-│
-├── examples/
-│   ├── basic-buzzer/
-│   └── custom-sounds/
-│
-└── tests/
-    └── README.md
+```cpp
+#define TEAM_ID 1                                              // 1-10, unique per unit
+uint8_t masterMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};  // replace with master MAC
 ```
 
----
-
-## 📥 FILES TO DOWNLOAD (Already Created)
-
-All these files are ready to download from above:
-
-1. ✅ **README.md** - Main documentation
-2. ✅ **LICENSE** - MIT License
-3. ✅ **CONTRIBUTING.md** - Contribution guidelines
-4. ✅ **CODE_OF_CONDUCT.md** - Community guidelines
-5. ✅ **CHANGELOG.md** - Version history
-6. ✅ **.gitignore** - Git ignore rules
-7. ✅ **HARDWARE_SETUP.md** - Hardware assembly guide
-
----
-
-## 📄 FILES YOU NEED TO CREATE
-
-Create these in your favorite text editor:
-
-### SOFTWARE_SETUP.md
-- PlatformIO installation
-- Firmware uploading steps
-- Dashboard setup
-- WiFi configuration
-
-### USER_GUIDE.md
-- How to use the system
-- Quiz master operation
-- Dashboard controls
-- Troubleshooting tips
-
-### API_REFERENCE.md
-- WebSocket message format
-- ESP-NOW payload structure
-- Dashboard API endpoints
-- Battery monitoring protocol
-
-### TROUBLESHOOTING.md
-- Common issues and solutions
-- Debug steps
-- FAQ
-- Contact support
-
----
-
-## 🎨 PROJECT STATISTICS
+Boot the master once and read its MAC address from the serial monitor:
 
 ```
-📊 Repository Metrics
-├── Total Files: 30+
-├── Lines of Code: 3000+
-├── Documentation Pages: 8+
-├── Hardware Diagrams: 3+
-├── Code Files:
-│   ├── Master Firmware: ~700 lines
-│   ├── Slave Firmware: ~400 lines
-│   ├── Dashboard HTML: ~120 lines
-│   ├── Dashboard CSS: ~200 lines
-│   └── Dashboard JS: ~400 lines
-└── Documentation: ~5000+ words
+🔑 MAC: AA:BB:CC:DD:EE:FF
 ```
 
----
+Paste it into `masterMAC`. The shipped all-`0xFF` value is a broadcast address: it
+works, but units then respond to any ESP-NOW traffic on the channel rather than
+to your master alone.
 
-## 🔑 IMPORTANT GIT COMMANDS
+## Master
 
 ```bash
-# Check status
-git status
-
-# Add specific file
-git add filename.md
-
-# Commit with message
-git commit -m "Your message here"
-
-# View commit history
-git log
-
-# Create new branch
-git checkout -b feature/new-feature
-
-# Switch branch
-git checkout branch-name
-
-# Delete local branch
-git branch -d branch-name
-
-# Push branch to GitHub
-git push origin branch-name
-
-# Pull latest changes
-git pull
-
-# View remote
-git remote -v
-
-# Add new remote
-git remote add upstream https://github.com/upstream/repo.git
-
-# Sync with upstream
-git fetch upstream
-git merge upstream/main
+cd firmware/master
+pio run                      # build
+pio run --target upload      # flash
+pio run --target uploadfs    # flash the dashboard to LittleFS
 ```
 
----
+## Dashboard
 
-## 📞 SUPPORT LINKS
+The dashboard lives in `dashboard/data` and is declared as the PlatformIO
+`data_dir`, so it is flashed from the master project:
 
-- **GitHub Docs:** https://docs.github.com
-- **Git Tutorial:** https://git-scm.com/book/en/v2
-- **GitHub Skills:** https://skills.github.com
-- **PlatformIO:** https://docs.platformio.org
-- **ESP32 Docs:** https://docs.espressif.com/projects/esp-idf
+```bash
+cd firmware/master
+pio run --target uploadfs
+```
 
----
+That writes `index.html`, `style.css`, and `script.js` into the master's
+LittleFS. Edit the files in `dashboard/data/` and re-run the command to update.
 
-## 🌟 AFTER UPLOAD CHECKLIST
+## Team units
 
-### SEO & Visibility
-- [ ] Add topics (10+ tags)
-- [ ] Write compelling README
-- [ ] Add badges (shields.io)
-- [ ] Include screenshots
-- [ ] Add system diagrams
+Flash once per unit, changing `TEAM_ID` each time:
 
-### Community Engagement
-- [ ] Enable "Discussions"
-- [ ] Set up issue templates
-- [ ] Create contributing guidelines
-- [ ] Respond to issues quickly
-- [ ] Welcome first-time contributors
+```bash
+cd firmware/slave
+pio run --target upload
+```
 
-### Documentation
-- [ ] Complete README
-- [ ] Hardware setup guide
-- [ ] Software installation
-- [ ] User manual
-- [ ] API documentation
-- [ ] Troubleshooting guide
-- [ ] FAQ section
+Repeat for units 1 through 10.
 
-### Social Media
-- [ ] Share on Twitter
-- [ ] Post on LinkedIn
-- [ ] Share on Reddit
-- [ ] Submit to Hackaday
-- [ ] Post on Dev.to
-- [ ] Share on Hackster.io
+## Serial monitor
 
-### Maintenance
-- [ ] Monitor GitHub issues
-- [ ] Review pull requests
-- [ ] Update documentation
-- [ ] Release updates
-- [ ] Respond to questions
+```bash
+pio device monitor --baud 115200
+```
 
----
+## Expected output
 
-## 💡 TIPS FOR SUCCESS
+Master, on boot:
 
-1. **First Impression:** Your README is your landing page. Make it count!
-2. **Documentation:** More documentation = more users
-3. **Examples:** Provide working examples
-4. **License:** MIT is perfect for open source
-5. **Issues:** Enable discussions for community
-6. **Badges:** Add shields.io badges to README
-7. **Collaborators:** Add college mates as contributors
-8. **Tags:** Use 10+ relevant tags
-9. **Releases:** Create releases for major versions
-10. **Updates:** Keep project updated and maintained
+```
+✅ LittleFS initialized!
+🔴 STANDBY mode
+```
 
----
+Flip the master's power switch to start it:
 
-## 🏆 PROJECT HIGHLIGHTS
+```
+🟢 SYSTEM ENABLED
+📡 AP IP: 192.168.4.1
+🔑 MAC: AA:BB:CC:DD:EE:FF
+✅ ESP-NOW initialized
+✅ Web server started
+📢 Starting in LISTEN mode
+```
 
-This project showcases:
-✨ Embedded Systems Design
-✨ Real-time Communication
-✨ Full-stack Development
-✨ IoT & Wireless Technology
-✨ Professional Documentation
-✨ Open Source Best Practices
+When a unit connects:
 
-**Perfect for:**
-- College projects
-- Job applications
-- Portfolio building
-- Technical interviews
-- Learning demonstrations
+```
+✅ Team 1 connected! | Battery: 100% (🔋 GREEN)
+```
 
----
+On a press:
 
-## 🎓 LEARNING OUTCOMES
+```
+=====================================
+🏆 FIRST TO BUZZ: Team 1
+⏱️  Timestamp: 1234567890 μs
+=====================================
+📝 Response #1: Team 1
+📦 Batch broadcast sent!
+```
 
-By completing this project and uploading it, you've learned:
+Team unit, on boot:
 
-1. **Hardware Design**
-   - Microcontroller programming (ESP32)
-   - Sensor integration
-   - Circuit design
+```
+🏷️  Team ID: 1
+🔑 MAC Address: AA:BB:CC:DD:EE:FF
+✅ ESP-NOW initialized!
+✅ Master peer added!
+🔋 Battery: 4.02V (99%) - 🔋 GREEN
+🔍 Searching for Master...
+```
 
-2. **Wireless Communication**
-   - ESP-NOW protocol
-   - Real-time data transmission
-   - Network architecture
+## Hardware pin map
 
-3. **Web Development**
-   - HTML/CSS/JavaScript
-   - WebSocket communication
-   - Responsive design
+Master — `firmware/master/src/main.cpp`:
 
-4. **Software Engineering**
-   - Version control (Git)
-   - Documentation
-   - Code organization
-   - Open source practices
+| Signal | GPIO |
+|--------|------|
+| Reset button | 13 |
+| LED winner | 2 |
+| LED sync | 15 |
+| LED ready | 16 |
+| Power switch | 25 |
+| OLED SDA / SCL | 21 / 22 |
 
-5. **Professional Skills**
-   - Project management
-   - Technical writing
-   - Community engagement
-   - Code review
+Team unit — `firmware/slave/src/main.cpp`:
 
----
+| Signal | GPIO |
+|--------|------|
+| Button | 4 |
+| LED action | 2 |
+| LED sync | 15 |
+| LED battery | 27 |
+| Buzzer | 5 |
+| Battery ADC | 34 |
 
-## 📈 NEXT STEPS AFTER UPLOAD
+The master has no buzzer. All buzzer feedback comes from the team units and the
+dashboard.
 
-1. **Get Stars:** 
-   - Share on social media
-   - Submit to dev platforms
-   - Ask friends to star
+## Build sizes
 
-2. **Build Community:**
-   - Respond to issues
-   - Accept contributions
-   - Help other users
+Verified with PlatformIO Core 6.2.0:
 
-3. **Improve Project:**
-   - Add new features
-   - Fix bugs
-   - Update documentation
+| Target | Flash | RAM |
+|--------|-------|-----|
+| `firmware/master` (`esp32dev`) | 894,369 B (68.2%) | 45,336 B (13.8%) |
+| `firmware/slave` (`esp32doit-devkit-v1`) | 744,765 B (56.8%) | 44,288 B (13.5%) |
 
-4. **Scale Project:**
-   - Mobile app
-   - More hardware variants
-   - Web platform version
+## Common problems
 
-5. **Monetize (Optional):**
-   - Sell kits
-   - Create courses
-   - Offer commercial version
+| Symptom | Fix |
+|---------|-----|
+| `UnicodeDecodeError` reading `platformio.ini` | The file is UTF-16. Re-save it as UTF-8. |
+| `pio run --target uploadfs` finds no files | Run it from `firmware/master`, where `data_dir` is configured. |
+| "Failed to connect to ESP32" | Hold BOOT while plugging in, release, then flash. |
+| Dashboard will not load | Confirm you joined `QuizBuzzer_AP` and are on `192.168.4.x`. |
+| Unit shows offline | Check `masterMAC` matches the master, and `TEAM_ID` is unique. |
+| Buzzer does not sound | Team units buzz locally; the master has no buzzer. |
+| OLED blank | Check SDA=21, SCL=22, and that the address is `0x3C`. |
 
----
-
-**🎉 CONGRATULATIONS ON YOUR GITHUB DEBUT! 🎉**
-
-**Your project is about to reach thousands of developers worldwide!**
+Longer explanations are in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 
 Made with ❤️ by Asif Ahamed S
 Rajalakshmi Engineering College, Chennai
-© 2026
